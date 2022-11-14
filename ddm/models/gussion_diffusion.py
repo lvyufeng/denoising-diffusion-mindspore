@@ -13,7 +13,7 @@ def unnormalize_to_zero_to_one(t):
     return (t + 1) * 0.5
 
 def extract(a, t, x_shape):
-    b, *_ = t.shape
+    b = t.shape[0]
     out = a.gather_elements(-1, t)
     return out.reshape(b, *((1,) * (len(x_shape) - 1)))
 
@@ -29,7 +29,7 @@ def cosine_beta_schedule(timesteps, s = 0.008):
     as proposed in https://openreview.net/forum?id=-NEXDKk8gZ
     """
     steps = timesteps + 1
-    x = ops.linspace(Tensor(0), Tensor(timesteps), steps).astype(mindspore.float32)
+    x = ops.linspace(Tensor(0, mindspore.float32), Tensor(timesteps, mindspore.float32), steps).astype(mindspore.float32)
     alphas_cumprod = ops.cos(((x / timesteps) + s) / (1 + s) * math.pi * 0.5) ** 2
     alphas_cumprod = alphas_cumprod / alphas_cumprod[0]
     betas = 1 - (alphas_cumprod[1:] / alphas_cumprod[:-1])
@@ -74,7 +74,7 @@ class GaussianDiffusion(nn.Cell):
         alphas = 1. - betas
         alphas_cumprod = ops.cumprod(alphas, dim=0)
         # alphas_cumprod_prev = F.pad(alphas_cumprod[:-1], (1, 0), value = 1.)
-        alphas_cumprod_prev = mnp.pad(alphas_cumprod[:-1], (1, 0), constant_values = 1.)
+        alphas_cumprod_prev = mnp.pad(alphas_cumprod[:-1], (1, 0), constant_values = 1)
 
         timesteps, = betas.shape
         self.num_timesteps = int(timesteps)
@@ -112,7 +112,7 @@ class GaussianDiffusion(nn.Cell):
 
         # below: log calculation clipped because the posterior variance is 0 at the beginning of the diffusion chain
 
-        self.posterior_log_variance_clipped = ops.log(posterior_variance.clip(xmin=1e-20))
+        self.posterior_log_variance_clipped = ops.log(posterior_variance.clip(xmin=1e-20, xmax=None))
         self.posterior_mean_coef1 = betas * ops.sqrt(alphas_cumprod_prev) / (1. - alphas_cumprod)
         self.posterior_mean_coef2 = (1. - alphas_cumprod_prev) * ops.sqrt(alphas) / (1. - alphas_cumprod)
 
@@ -183,6 +183,9 @@ class GaussianDiffusion(nn.Cell):
             x_start = self.predict_start_from_v(x, t, v)
             x_start = maybe_clip(x_start, clip_x_start)
             pred_noise = self.predict_noise_from_start(x, t, x_start)
+        else:
+            pred_noise = model_output
+            x_start = model_output
 
         return pred_noise, x_start
 
@@ -195,8 +198,8 @@ class GaussianDiffusion(nn.Cell):
         model_mean, posterior_variance, posterior_log_variance = self.q_posterior(x_start = x_start, x_t = x, t = t)
         return model_mean, posterior_variance, posterior_log_variance, x_start
 
+    @jit
     def p_sample(self, x, t: int, x_self_cond = None, clip_denoised = True):
-        b = x.shape[0]
         batched_times = ops.fill(mindspore.int32, (x.shape[0],), t)
         model_mean, _, model_log_variance, x_start = self.p_mean_variance(x = x, t = batched_times, x_self_cond = x_self_cond, clip_denoised = clip_denoised)
         noise = randn_like(x) if t > 0 else ops.zeros_like(x) # no noise if t == 0
@@ -204,8 +207,6 @@ class GaussianDiffusion(nn.Cell):
         return pred_img, x_start
 
     def p_sample_loop(self, shape):
-        batch = shape[0]
-
         img = randn(shape)
         x_start = None
 

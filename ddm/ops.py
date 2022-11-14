@@ -13,7 +13,7 @@ def rearrange(head, inputs):
 
 def randint(low, high, size, dtype=mindspore.int32):
     uniform_int = _get_cache_prim(ops.UniformInt)()
-    return uniform_int(Tensor(high), Tensor(low), size)
+    return uniform_int(size, Tensor(low, mindspore.int32), Tensor(high, mindspore.int32)).astype(dtype)
 
 def random():
     uniform = _get_cache_prim(ops.UniformReal)()

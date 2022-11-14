@@ -82,7 +82,7 @@ class Unet(nn.Cell):
                 block_klass(dim_out + dim_in, dim_out, time_emb_dim = time_dim),
                 block_klass(dim_out + dim_in, dim_out, time_emb_dim = time_dim),
                 Residual(PreNorm(dim_out, LinearAttention(dim_out))),
-                upsample(dim_out, dim_in) if not is_last else  nn.Conv2d(dim_out, dim_in, 3, padding = 1)
+                upsample(dim_out, dim_in) if not is_last else  nn.Conv2d(dim_out, dim_in, 3, padding = 1, pad_mode='pad')
             ]))
 
         default_out_dim = channels * (1 if not learned_variance else 2)
@@ -118,11 +118,14 @@ class Unet(nn.Cell):
         x = self.mid_attn(x)
         x = self.mid_block2(x, t)
 
+        len_h = len(h) - 1
         for block1, block2, attn, upsample in self.ups:
-            x = ops.concat((x, h.pop()), 1)
+            x = ops.concat((x, h[len_h]), 1)
+            len_h -= 1
             x = block1(x, t)
 
-            x = ops.concat((x, h.pop()), 1)
+            x = ops.concat((x, h[len_h]), 1)
+            len_h -= 1
             x = block2(x, t)
             x = attn(x)
 

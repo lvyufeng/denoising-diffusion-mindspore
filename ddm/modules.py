@@ -111,7 +111,7 @@ class RandomOrLearnedSinusoidalPosEmb(nn.Cell):
 class Block(nn.Cell):
     def __init__(self, dim, dim_out, groups = 8):
         super().__init__()
-        self.proj = WeightStandardizedConv2d(dim, dim_out, 3, padding = 1)
+        self.proj = WeightStandardizedConv2d(dim, dim_out, 3, padding = 1, pad_mode='pad')
         self.norm = nn.GroupNorm(groups, dim_out)
         self.act = nn.SiLU()
 
@@ -182,7 +182,7 @@ class LinearAttention(nn.Cell):
         # 'b h d n, b h e n -> b h d e'
         context = (k.expand_dims(3) * v.expand_dims(2)).sum(-1)
         # 'b h d e, b h d n -> b h e n'
-        out = (context.expand_dims(-1), q.expand_dims(-2)).sum(2)
+        out = (context.expand_dims(-1) * q.expand_dims(-2)).sum(2)
 
         out = out.reshape((b, -1, h, w))
         return self.to_out(out)
@@ -196,8 +196,10 @@ class Attention(nn.Cell):
 
         self.to_qkv = nn.Conv2d(dim, hidden_dim * 3, 1, pad_mode='valid', has_bias = False)
         self.to_out = nn.Conv2d(hidden_dim, dim, 1, pad_mode='valid', has_bias = True)
+        self.map = ops.Map()
+        self.partial = ops.Partial()
 
-    def forward(self, x):
+    def construct(self, x):
         b, c, h, w = x.shape
         qkv = self.to_qkv(x).split(1, 3)
         q, k, v = self.map(self.partial(rearrange, self.heads), qkv)
@@ -205,10 +207,10 @@ class Attention(nn.Cell):
         q = q * self.scale
 
         # 'b h d i, b h d j -> b h i j'
-        sim = (q.expand_dims(-1), k.expand_dims(-2)).sum(2)
+        sim = (q.expand_dims(-1) * k.expand_dims(-2)).sum(2)
         attn = ops.softmax(sim, axis=-1)
         # 'b h i j, b h d j -> b h i d'
-        out = (attn.expand_dims(3), v.expand_dims(2)).sum(-1)
+        out = (attn.expand_dims(3) * v.expand_dims(2)).sum(-1)
 
         # out = rearrange(out, 'b h (x y) d -> b (h d) x y', x = h, y = w)
         out = out.swapaxes(-1, -2).reshape((b, -1, h, w))
