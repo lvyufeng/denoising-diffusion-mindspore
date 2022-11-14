@@ -2,7 +2,7 @@ import math
 from tqdm import tqdm
 import mindspore
 import mindspore.numpy as mnp
-from mindspore import nn, ops, jit, Tensor
+from mindspore import nn, ops, jit, Tensor, mutable
 from ..modules import default
 from ..ops import random, randint, randn, randn_like
 
@@ -199,8 +199,8 @@ class GaussianDiffusion(nn.Cell):
         return model_mean, posterior_variance, posterior_log_variance, x_start
 
     @jit
-    def p_sample(self, x, t: int, x_self_cond = None, clip_denoised = True):
-        batched_times = ops.fill(mindspore.int32, (x.shape[0],), t)
+    def p_sample(self, x, t, x_self_cond = None, clip_denoised = True):
+        batched_times = ops.ones((x.shape[0],), mindspore.int32) * t
         model_mean, _, model_log_variance, x_start = self.p_mean_variance(x = x, t = batched_times, x_self_cond = x_self_cond, clip_denoised = clip_denoised)
         noise = randn_like(x) if t > 0 else ops.zeros_like(x) # no noise if t == 0
         pred_img = model_mean + (0.5 * model_log_variance).exp() * noise
@@ -212,7 +212,8 @@ class GaussianDiffusion(nn.Cell):
 
         for t in tqdm(reversed(range(0, self.num_timesteps)), desc = 'sampling loop time step', total = self.num_timesteps):
             self_cond = x_start if self.self_condition else None
-            img, x_start = self.p_sample(img, t, self_cond)
+            img, x_start = self.p_sample(img, Tensor(t, mindspore.int32), self_cond)
+            img = img.value()
 
         img = unnormalize_to_zero_to_one(img)
         return img

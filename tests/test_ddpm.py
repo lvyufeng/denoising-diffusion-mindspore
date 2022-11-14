@@ -1,4 +1,3 @@
-import mindspore
 from mindspore import value_and_grad
 from ddm import Unet, GaussianDiffusion
 from ddm.ops import randn
