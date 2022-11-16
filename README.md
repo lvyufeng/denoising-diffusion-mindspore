@@ -22,8 +22,7 @@ pip install git+https://openi.pcl.ac.cn/lvyufeng/denoising-diffusion-mindspore
 ## Usage
 
 ```python
-from mindspore import value_and_grad
-from ddm import Unet, GaussianDiffusion
+from ddm import Unet, GaussianDiffusion, value_and_grad
 from ddm.ops import randn
 
 model = Unet(
