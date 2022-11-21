@@ -10,7 +10,7 @@ def test_one_step():
     diffusion = GaussianDiffusion(
         model,
         image_size = 128,
-        timesteps = 1000,   # number of steps
+        timesteps = 10,   # number of steps
         loss_type = 'l1'    # L1 or L2
     )
 

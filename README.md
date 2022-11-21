@@ -46,38 +46,44 @@ loss, grads = grad_fn(training_images)
 sampled_images = diffusion.sample(batch_size = 1)
 print(sampled_images.shape) # (4, 3, 128, 128)
 ```
-<!-- 
+
 Or, if you simply want to pass in a folder name and the desired image dimensions, you can use the `Trainer` class to easily train a model.
 
 ```python
-from denoising_diffusion_pytorch import Unet, GaussianDiffusion, Trainer
+from download import download
+from ddm import Unet, GaussianDiffusion, Trainer
+
+url = 'https://www.robots.ox.ac.uk/~vgg/data/flowers/102/102flowers.tgz'
+path = download(url, './102flowers', 'tar.gz')
 
 model = Unet(
     dim = 64,
     dim_mults = (1, 2, 4, 8)
-).cuda()
+)
 
 diffusion = GaussianDiffusion(
     model,
-    image_size = 128,
-    timesteps = 1000,           # number of steps
-    sampling_timesteps = 250,   # number of sampling timesteps (using ddim for faster inference [see citation for ddim paper])
+    image_size = 64,
+    timesteps = 10,             # number of steps
+    sampling_timesteps = 5,     # number of sampling timesteps (using ddim for faster inference [see citation for ddim paper])
     loss_type = 'l1'            # L1 or L2
-).cuda()
+)
 
 trainer = Trainer(
     diffusion,
-    'path/to/your/images',
-    train_batch_size = 32,
+    path,
+    train_batch_size = 1,
     train_lr = 8e-5,
-    train_num_steps = 700000,         # total training steps
+    train_num_steps = 1000,         # total training steps
     gradient_accumulate_every = 2,    # gradient accumulation steps
     ema_decay = 0.995,                # exponential moving average decay
-    amp = True                        # turn on mixed precision
+    amp = False,                        # turn on mixed precision
 )
 
 trainer.train()
 ```
+
+<!-- 
 
 Samples and model checkpoints will be logged to `./results` periodically
 

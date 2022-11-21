@@ -1,7 +1,9 @@
+import math
 from mindspore import nn, ops, Tensor
 from mindspore.ops import constexpr
 from mindspore.ops.operations.image_ops import ResizeBilinearV2, ResizeLinear1D
 from mindspore.ops._primitive_cache import _get_cache_prim
+from mindspore.common.initializer import initializer, HeUniform, Uniform, Normal, _calculate_fan_in_and_fan_out
 
 
 @constexpr
@@ -59,4 +61,30 @@ class Upsample(nn.Cell):
         elif self.mode == 'bilinear':
             interpolate = _get_cache_prim(ResizeBilinearV2)(self.align_corners, True if self.align_corners==False else False)
             return interpolate(inputs, sizes)
-        return 
+        return inputs
+
+class Conv2d(nn.Conv2d):
+    def __init__(self, in_channels, out_channels, kernel_size, stride=1, pad_mode='same', padding=0, dilation=1, group=1, has_bias=True):
+        super().__init__(in_channels, out_channels, kernel_size, stride, pad_mode, padding, dilation, group, has_bias, weight_init='normal', bias_init='zeros')
+        self.reset_parameters()
+        
+    def reset_parameters(self):
+        self.weight.set_data(initializer(HeUniform(math.sqrt(5)), self.weight.shape))
+        #self.weight = Parameter(initializer(HeUniform(math.sqrt(5)), self.weight.shape), name='weight')
+        if self.has_bias:
+            fan_in, _ = _calculate_fan_in_and_fan_out(self.weight.shape)
+            bound = 1 / math.sqrt(fan_in)
+            self.bias.set_data(initializer(Uniform(bound), [self.out_channels]))
+
+
+class Dense(nn.Dense):
+    def __init__(self, in_channels, out_channels, has_bias=True, activation=None):
+        super().__init__(in_channels, out_channels, weight_init='normal', bias_init='zeros', has_bias=has_bias, activation=activation)
+        self.reset_parameters()
+        
+    def reset_parameters(self):
+        self.weight.set_data(initializer(HeUniform(math.sqrt(5)), self.weight.shape))
+        if self.has_bias:
+            fan_in, _ = _calculate_fan_in_and_fan_out(self.weight.shape)
+            bound = 1 / math.sqrt(fan_in)
+            self.bias.set_data(initializer(Uniform(bound), [self.out_channels]))

@@ -3,7 +3,7 @@ import numpy as np
 import mindspore
 from mindspore import nn, ops, Tensor, Parameter
 from mindspore.common.initializer import initializer, Normal
-from .layers import Upsample
+from .layers import Upsample, Conv2d, Dense
 from .ops import rsqrt, rearrange
 
 def exists(x):
@@ -25,13 +25,13 @@ class Residual(nn.Cell):
 def upsample(dim, dim_out = None):
     return nn.SequentialCell(
         Upsample(scale_factor = 2, mode = 'nearest'),
-        nn.Conv2d(dim, default(dim_out, dim), 3, padding = 1, pad_mode='pad')
+        Conv2d(dim, default(dim_out, dim), 3, padding = 1, pad_mode='pad')
     )
 
 def downsample(dim, dim_out = None):
-    return nn.Conv2d(dim, default(dim_out, dim), 4, 2, 'pad', 1)
+    return Conv2d(dim, default(dim_out, dim), 4, 2, 'pad', 1)
 
-class WeightStandardizedConv2d(nn.Conv2d):
+class WeightStandardizedConv2d(Conv2d):
     """
     https://arxiv.org/abs/1903.10520
     weight standardization purportedly works synergistically with group normalization
@@ -42,7 +42,7 @@ class WeightStandardizedConv2d(nn.Conv2d):
         weight = self.weight
         mean = weight.mean((1, 2, 3), keep_dims=True)
         var = weight.var((1, 2, 3), keepdims=True)
-        normalized_weight = rsqrt((weight - mean) * (var + eps))
+        normalized_weight = (weight - mean) * rsqrt((var + eps))
 
         output = self.conv2d(x, normalized_weight)
         if self.has_bias:
@@ -58,7 +58,7 @@ class LayerNorm(nn.Cell):
         eps = 1e-5 if x.dtype == mindspore.float32 else 1e-3
         var = x.var(1, keepdims=True)
         mean = x.mean(1, keep_dims=True)
-        return rsqrt((x - mean) * (var + eps)) * self.g
+        return (x - mean) * rsqrt((var + eps)) * self.g
 
 class PreNorm(nn.Cell):
     def __init__(self, dim, fn):
@@ -131,26 +131,23 @@ class ResnetBlock(nn.Cell):
         super().__init__()
         self.mlp = nn.SequentialCell(
             nn.SiLU(),
-            nn.Dense(time_emb_dim, dim_out * 2)
+            Dense(time_emb_dim, dim_out * 2)
         ) if exists(time_emb_dim) else None
 
         self.block1 = Block(dim, dim_out, groups = groups)
         self.block2 = Block(dim_out, dim_out, groups = groups)
-        self.res_conv = nn.Conv2d(dim, dim_out, 1, pad_mode='valid') if dim != dim_out else nn.Identity()
+        self.res_conv = Conv2d(dim, dim_out, 1, pad_mode='valid') if dim != dim_out else nn.Identity()
 
     def construct(self, x, time_emb = None):
-
         scale_shift = None
         if exists(self.mlp) and exists(time_emb):
             time_emb = self.mlp(time_emb)
             time_emb = time_emb.expand_dims(-1).expand_dims(-1) 
             scale_shift = time_emb.split(axis=1, output_num=2)
-
         h = self.block1(x, scale_shift = scale_shift)
-
         h = self.block2(h)
-
-        return h + self.res_conv(x)
+        h = h + self.res_conv(x)
+        return h
 
 class LinearAttention(nn.Cell):
     def __init__(self, dim, heads = 4, dim_head = 32):
@@ -158,10 +155,10 @@ class LinearAttention(nn.Cell):
         self.scale = dim_head ** -0.5
         self.heads = heads
         hidden_dim = dim_head * heads
-        self.to_qkv = nn.Conv2d(dim, hidden_dim * 3, 1, pad_mode='valid', has_bias = False)
+        self.to_qkv = Conv2d(dim, hidden_dim * 3, 1, pad_mode='valid', has_bias = False)
 
         self.to_out = nn.SequentialCell(
-            nn.Conv2d(hidden_dim, dim, 1, pad_mode='valid', has_bias = True),
+            Conv2d(hidden_dim, dim, 1, pad_mode='valid', has_bias = True),
             LayerNorm(dim)
         )
 
@@ -194,8 +191,8 @@ class Attention(nn.Cell):
         self.heads = heads
         hidden_dim = dim_head * heads
 
-        self.to_qkv = nn.Conv2d(dim, hidden_dim * 3, 1, pad_mode='valid', has_bias = False)
-        self.to_out = nn.Conv2d(hidden_dim, dim, 1, pad_mode='valid', has_bias = True)
+        self.to_qkv = Conv2d(dim, hidden_dim * 3, 1, pad_mode='valid', has_bias = False)
+        self.to_out = Conv2d(hidden_dim, dim, 1, pad_mode='valid', has_bias = True)
         self.map = ops.Map()
         self.partial = ops.Partial()
 

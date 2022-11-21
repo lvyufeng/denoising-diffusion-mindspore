@@ -303,6 +303,7 @@ class GaussianDiffusion(nn.Cell):
         # predict and take gradient step
 
         model_out = self.model(x, t, x_self_cond)
+        # print(model_out)
 
         if self.objective == 'pred_noise':
             target = noise
