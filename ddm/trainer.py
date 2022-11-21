@@ -29,7 +29,7 @@ class Trainer(object):
         save_and_sample_every = 1000,
         num_samples = 25,
         results_folder = './results',
-        amp = False,
+        amp_level = 'O1',
         jit = True,
         distributed = False,
     ):
@@ -50,11 +50,10 @@ class Trainer(object):
 
         # auto mixed precision
         from .amp import DynamicLossScaler, NoLossScaler, auto_mixed_precision
-        if amp:
-            self.model = auto_mixed_precision(diffusion_model)
+        self.model = auto_mixed_precision(diffusion_model, amp_level)
+        if amp_level != 'O0':
             self.loss_scaler = DynamicLossScaler(65536, 2, 1000)
         else:
-            self.model = diffusion_model
             self.loss_scaler = NoLossScaler()
 
         assert has_int_squareroot(num_samples), 'number of samples must have an integer square root'
@@ -69,7 +68,8 @@ class Trainer(object):
         # dataset and dataloader
         self.ds = create_dataset(folder, self.image_size, augment_horizontal_flip=augment_horizontal_flip, \
             batch_size=train_batch_size, num_shards=rank_size, shard_id=rank_id, shuffle=True, drop_remainder=True)
-
+        dataset_size = self.ds.get_dataset_size()
+        self.ds = self.ds.repeat(int(train_num_steps * gradient_accumulate_every // dataset_size) + 1)
         # optimizer
         self.opt = nn.Adam(diffusion_model.trainable_params(), train_lr, adam_betas[0], adam_betas[1])
 
@@ -141,12 +141,9 @@ class Trainer(object):
         data_iterator = self.ds.create_tuple_iterator()
         with tqdm(initial = self.step, total = self.train_num_steps, disable = not self.is_main_process) as pbar:
             total_loss = 0.
-            while self.step < self.train_num_steps * self.gradient_accumulate_every:
-                (data,) = next(data_iterator)
-
+            for (data,) in data_iterator:
                 loss = train_step(data)
                 total_loss += loss.asnumpy()
-
                 # if accelerator.is_main_process:
                 #     self.ema.to(device)
                 #     self.ema.update()
@@ -167,5 +164,7 @@ class Trainer(object):
                     pbar.set_description(f'loss: {total_loss:.4f}')
                     pbar.update(1)
                     total_loss = 0.
+                if self.step >= self.gradient_accumulate_every * self.train_num_steps:
+                    break
 
         # accelerator.print('training complete')

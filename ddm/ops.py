@@ -30,3 +30,17 @@ def randn(shape, dtype=None):
         dtype = mindspore.float32
     normal = _get_cache_prim(ops.StandardNormal)()
     return normal(shape).astype(dtype)
+
+def cumprod(input, dim, dtype=None):
+    cumprod_op = _get_cache_prim(ops.CumProd)()
+    output = cumprod_op(input, dim)
+    if dtype:
+        output = _get_cache_prim(ops.Cast)()(output, dtype)
+    return output
+
+def softmax(x, axis=-1):
+    if not isinstance(axis, int):
+        type_axis = type(axis).__name__
+        raise TypeError(f" the type of 'axis' must be 'int', but got '{axis}' with type '{type_axis}'.")
+    softmax_ = _get_cache_prim(ops.Softmax)(axis=axis)
+    return softmax_(x)

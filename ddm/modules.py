@@ -4,7 +4,7 @@ import mindspore
 from mindspore import nn, ops, Tensor, Parameter
 from mindspore.common.initializer import initializer, Normal
 from .layers import Upsample, Conv2d, Dense
-from .ops import rsqrt, rearrange
+from .ops import rsqrt, rearrange, softmax
 
 def exists(x):
     return x is not None
@@ -44,7 +44,7 @@ class WeightStandardizedConv2d(Conv2d):
         var = weight.var((1, 2, 3), keepdims=True)
         normalized_weight = (weight - mean) * rsqrt((var + eps))
 
-        output = self.conv2d(x, normalized_weight)
+        output = self.conv2d(x, normalized_weight.astype(x.dtype))
         if self.has_bias:
             output = self.bias_add(output, self.bias)
         return output
@@ -170,8 +170,8 @@ class LinearAttention(nn.Cell):
         qkv = self.to_qkv(x).split(1, 3)
         q, k, v = self.map(self.partial(rearrange, self.heads), qkv)
 
-        q = ops.softmax(q, -2)
-        k = ops.softmax(k, -1)
+        q = softmax(q, -2)
+        k = softmax(k, -1)
 
         q = q * self.scale
         v = v / (h * w)
@@ -205,7 +205,7 @@ class Attention(nn.Cell):
 
         # 'b h d i, b h d j -> b h i j'
         sim = (q.expand_dims(-1) * k.expand_dims(-2)).sum(2)
-        attn = ops.softmax(sim, axis=-1)
+        attn = softmax(sim, axis=-1)
         # 'b h i j, b h d j -> b h i d'
         out = (attn.expand_dims(3) * v.expand_dims(2)).sum(-1)
 

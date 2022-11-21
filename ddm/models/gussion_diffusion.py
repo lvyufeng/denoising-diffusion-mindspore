@@ -2,9 +2,9 @@ import math
 from tqdm import tqdm
 import mindspore
 import mindspore.numpy as mnp
-from mindspore import nn, ops, jit, Tensor, mutable
+from mindspore import nn, ops, ms_function, Tensor, mutable
 from ..modules import default
-from ..ops import random, randint, randn, randn_like
+from ..ops import random, randint, randn, randn_like, cumprod
 
 def normalize_to_neg_one_to_one(img):
     return img * 2 - 1
@@ -72,7 +72,7 @@ class GaussianDiffusion(nn.Cell):
             raise ValueError(f'unknown beta schedule {beta_schedule}')
 
         alphas = 1. - betas
-        alphas_cumprod = ops.cumprod(alphas, dim=0)
+        alphas_cumprod = cumprod(alphas, dim=0)
         # alphas_cumprod_prev = F.pad(alphas_cumprod[:-1], (1, 0), value = 1.)
         alphas_cumprod_prev = mnp.pad(alphas_cumprod[:-1], (1, 0), constant_values = 1)
 
@@ -198,7 +198,7 @@ class GaussianDiffusion(nn.Cell):
         model_mean, posterior_variance, posterior_log_variance = self.q_posterior(x_start = x_start, x_t = x, t = t)
         return model_mean, posterior_variance, posterior_log_variance, x_start
 
-    @jit
+    @ms_function
     def p_sample(self, x, t, x_self_cond = None, clip_denoised = True):
         batched_times = ops.ones((x.shape[0],), mindspore.int32) * t
         model_mean, _, model_log_variance, x_start = self.p_mean_variance(x = x, t = batched_times, x_self_cond = x_self_cond, clip_denoised = clip_denoised)
