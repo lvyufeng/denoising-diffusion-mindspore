@@ -117,6 +117,7 @@ class Trainer(object):
 
         model = self.model
         accumulator = self.accumulator
+        optimizer = self.opt
         loss_scaler = self.loss_scaler
         grad_acc = self.gradient_accumulate_every
 
@@ -133,7 +134,8 @@ class Trainer(object):
             if status:
                 loss = loss_scaler.unscale(loss)
                 grads = loss_scaler.unscale(grads)
-                accumulator.step(grads)
+                accumulator(grads)
+                # loss = ops.depend(loss, optimizer(grads))
             loss_scaler.adjust(status)
             return loss
 
@@ -144,8 +146,10 @@ class Trainer(object):
         with tqdm(initial = self.step, total = self.train_num_steps, disable = not self.is_main_process) as pbar:
             total_loss = 0.
             for (data, noise) in data_iterator:
+                model.set_train()
                 loss = train_step(data, noise)
                 total_loss += loss.asnumpy()
+                
                 # if accelerator.is_main_process:
                 #     self.ema.to(device)
                 #     self.ema.update()
