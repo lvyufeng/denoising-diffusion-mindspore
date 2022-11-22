@@ -1,5 +1,6 @@
 import mindspore
 from mindspore import ms_class, Tensor, Parameter, ops
+from .ops import clip_grad_norm
 
 def _update(grad_sum, grad):
     """Apply grad sum to cumulative gradient."""
@@ -29,13 +30,15 @@ class Accumulator:
     
     def step(self, grads):
         if self.counter % self.accumulate_step == 0:
-            self.optimizer(self.inner_grads)
+            clip_grads, _ = clip_grad_norm(self.inner_grads, self.clip_norm)
+            self.optimizer(clip_grads)
             success = self.map(ops.partial(_clear), self.inner_grads, self.zeros)
         else:
             success = self.map(ops.partial(_update), self.inner_grads, grads)
         # for last step which can not be divided by accumulate_step
         if self.total_step is not None and self.counter == self.total_step:
-            clip_grads = ops.clip_by_global_norm(self.inner_grads, self.clip_norm)
+            # clip_grads = ops.clip_by_global_norm(self.inner_grads, self.clip_norm)
+            clip_grads, _ = clip_grad_norm(self.inner_grads, self.clip_norm)
             self.optimizer(clip_grads)
         ops.assign_add(self.counter, Tensor(1, mindspore.int32))
 

@@ -129,6 +129,7 @@ class Block(nn.Cell):
 class ResnetBlock(nn.Cell):
     def __init__(self, dim, dim_out, *, time_emb_dim = None, groups = 8):
         super().__init__()
+        # print(dim_out)
         self.mlp = nn.SequentialCell(
             nn.SiLU(),
             Dense(time_emb_dim, dim_out * 2)
@@ -162,8 +163,10 @@ class LinearAttention(nn.Cell):
             LayerNorm(dim)
         )
 
-        self.map = ops.Map()
+        self.map = ops.HyperMap()
         self.partial = ops.Partial()
+        self.eq1 = ops.Einsum('b h d n, b h e n -> b h d e')
+        self.eq2 = ops.Einsum('b h d e, b h d n -> b h e n')
 
     def construct(self, x):
         b, c, h, w = x.shape
@@ -177,9 +180,11 @@ class LinearAttention(nn.Cell):
         v = v / (h * w)
 
         # 'b h d n, b h e n -> b h d e'
-        context = (k.expand_dims(3) * v.expand_dims(2)).sum(-1)
+        # context = (k.expand_dims(3) * v.expand_dims(2)).sum(-1)
+        context = self.eq1((k, v))
         # 'b h d e, b h d n -> b h e n'
-        out = (context.expand_dims(-1) * q.expand_dims(-2)).sum(2)
+        # out = (context.expand_dims(-1) * q.expand_dims(-2)).sum(2)
+        out = self.eq2((context, q))
 
         out = out.reshape((b, -1, h, w))
         return self.to_out(out)
@@ -193,8 +198,10 @@ class Attention(nn.Cell):
 
         self.to_qkv = Conv2d(dim, hidden_dim * 3, 1, pad_mode='valid', has_bias = False)
         self.to_out = Conv2d(hidden_dim, dim, 1, pad_mode='valid', has_bias = True)
-        self.map = ops.Map()
+        self.map = ops.HyperMap()
         self.partial = ops.Partial()
+        self.eq1 = ops.Einsum('b h d i, b h d j -> b h i j')
+        self.eq2 = ops.Einsum('b h i j, b h d j -> b h i d')
 
     def construct(self, x):
         b, c, h, w = x.shape
@@ -204,11 +211,12 @@ class Attention(nn.Cell):
         q = q * self.scale
 
         # 'b h d i, b h d j -> b h i j'
-        sim = (q.expand_dims(-1) * k.expand_dims(-2)).sum(2)
+        # sim = (q.expand_dims(-1) * k.expand_dims(-2)).sum(2)
+        sim = self.eq1((q, k))
         attn = softmax(sim, axis=-1)
         # 'b h i j, b h d j -> b h i d'
-        out = (attn.expand_dims(3) * v.expand_dims(2)).sum(-1)
-
+        # out = (attn.expand_dims(3) * v.expand_dims(2)).sum(-1)
+        out = self.eq2((attn, v))
         # out = rearrange(out, 'b h (x y) d -> b (h d) x y', x = h, y = w)
         out = out.swapaxes(-1, -2).reshape((b, -1, h, w))
 

@@ -38,7 +38,7 @@ class Unet(nn.Cell):
         # time embeddings
 
         time_dim = dim * 4
-
+        # print(time_dim)
         self.random_or_learned_sinusoidal_cond = learned_sinusoidal_cond or random_fourier_features
 
         if self.random_or_learned_sinusoidal_cond:
@@ -56,11 +56,11 @@ class Unet(nn.Cell):
         )
 
         # layers
-
-        self.downs = nn.CellList([])
-        self.ups = nn.CellList([])
+        self.downs = []
+        self.ups = []
         num_resolutions = len(in_out)
 
+        print(in_out)
         for ind, (dim_in, dim_out) in enumerate(in_out):
             is_last = ind >= (num_resolutions - 1)
 
@@ -86,6 +86,9 @@ class Unet(nn.Cell):
                 upsample(dim_out, dim_in) if not is_last else  Conv2d(dim_out, dim_in, 3, padding = 1, pad_mode='pad')
             ]))
 
+        self.downs = nn.CellList(self.downs)
+        self.ups = nn.CellList(self.ups)
+
         default_out_dim = channels * (1 if not learned_variance else 2)
         self.out_dim = default(out_dim, default_out_dim)
 
@@ -110,7 +113,7 @@ class Unet(nn.Cell):
             x = attn(x)
             h.append(x)
 
-            x = downsample(x)
+            x = downsample(x) # 
 
         x = self.mid_block1(x, t)
         x = self.mid_attn(x)

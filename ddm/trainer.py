@@ -34,7 +34,8 @@ class Trainer(object):
         distributed = False,
     ):
         super().__init__()
-
+        if jit:
+            mindspore.set_context(enable_graph_kernel=True)
         # distributed training
         if distributed:
             init()
@@ -117,16 +118,17 @@ class Trainer(object):
         model = self.model
         accumulator = self.accumulator
         loss_scaler = self.loss_scaler
+        grad_acc = self.gradient_accumulate_every
 
-        def forward_fn(data):
-            loss = model(data)
+        def forward_fn(data, noise):
+            loss = model(data, noise)
             loss = loss_scaler.scale(loss)
-            return loss
+            return loss / grad_acc
 
         grad_fn = value_and_grad(forward_fn, None, self.opt.parameters)
 
-        def train_step(data):
-            loss, grads = grad_fn(data)
+        def train_step(data, noise):
+            loss, grads = grad_fn(data, noise)
             status = all_finite(grads)
             if status:
                 loss = loss_scaler.unscale(loss)
@@ -141,8 +143,8 @@ class Trainer(object):
         data_iterator = self.ds.create_tuple_iterator()
         with tqdm(initial = self.step, total = self.train_num_steps, disable = not self.is_main_process) as pbar:
             total_loss = 0.
-            for (data,) in data_iterator:
-                loss = train_step(data)
+            for (data, noise) in data_iterator:
+                loss = train_step(data, noise)
                 total_loss += loss.asnumpy()
                 # if accelerator.is_main_process:
                 #     self.ema.to(device)
@@ -161,7 +163,7 @@ class Trainer(object):
                 #         self.save(milestone)
                 self.step += 1
                 if self.step % self.gradient_accumulate_every == 0:
-                    pbar.set_description(f'loss: {total_loss:.4f}')
+                    pbar.set_description(f'loss: {float(total_loss):.4f}')
                     pbar.update(1)
                     total_loss = 0.
                 if self.step >= self.gradient_accumulate_every * self.train_num_steps:

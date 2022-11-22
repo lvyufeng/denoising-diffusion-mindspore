@@ -273,22 +273,14 @@ class GaussianDiffusion(nn.Cell):
 
         return img
 
-    def q_sample(self, x_start, t, noise=None):
-        if noise is None:
-            noise = randn_like(x_start)
-
+    def q_sample(self, x_start, t, noise):
         return (
             extract(self.sqrt_alphas_cumprod, t, x_start.shape) * x_start +
             extract(self.sqrt_one_minus_alphas_cumprod, t, x_start.shape) * noise
         )
 
-    def p_losses(self, x_start, t, noise = None):
-        b, c, h, w = x_start.shape
-        if noise is None:
-            noise = randn_like(x_start)
-
+    def p_losses(self, x_start, t, noise):
         # noise sample
-
         x = self.q_sample(x_start = x_start, t = t, noise = noise)
 
         # if doing self-conditioning, 50% of the time, predict x_start from current set of times
@@ -324,9 +316,9 @@ class GaussianDiffusion(nn.Cell):
         loss = loss * extract(self.p2_loss_weight, t, loss.shape)
         return loss.mean()
 
-    def construct(self, img, *args, **kwargs):
+    def construct(self, img, noise):
         b = img.shape[0]
         t = randint(0, self.num_timesteps, (b,))
 
         img = normalize_to_neg_one_to_one(img)
-        return self.p_losses(img, t, *args, **kwargs)
+        return self.p_losses(img, t, noise)
