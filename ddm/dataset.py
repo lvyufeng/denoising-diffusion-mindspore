@@ -1,6 +1,7 @@
 from multiprocessing import cpu_count
 from mindspore.dataset import ImageFolderDataset
 from mindspore.dataset.vision import Resize, Inter, CenterCrop, ToTensor, RandomHorizontalFlip, Rescale
+import numpy as np
 
 def create_dataset(folder, image_size, exts = ['.jpg', '.jpeg', '.png', '.tiff'], \
                    augment_horizontal_flip=False, batch_size=32, num_shards=1, shard_id=0, \
@@ -13,11 +14,15 @@ def create_dataset(folder, image_size, exts = ['.jpg', '.jpeg', '.png', '.tiff']
         ToTensor()
     ]
 
+    def gen_noise(image):
+        return image, np.random.randn(*image.shape).astype(image.dtype)
+
     dataset = dataset.project('image')
     if augment_horizontal_flip:
         transfroms.insert(1, RandomHorizontalFlip())
 
     dataset = dataset.map(transfroms, 'image')
+    dataset = dataset.map(gen_noise, 'image', ['image', 'noise'], ['image', 'noise'])
     if shuffle:
         dataset = dataset.shuffle(1024)
     dataset = dataset.batch(batch_size, drop_remainder=drop_remainder)
