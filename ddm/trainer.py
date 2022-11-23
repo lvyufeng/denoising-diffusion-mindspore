@@ -1,5 +1,6 @@
 import math
 from tqdm import tqdm
+from pathlib import Path
 import mindspore
 from mindspore import nn, ops
 from mindspore import ms_function, save_checkpoint, load_checkpoint, load_param_into_net
@@ -49,6 +50,9 @@ class Trainer(object):
             rank_size = 1
         
         self.is_main_process = True if rank_id == 0 else False
+        if self.is_main_process:
+            self.results_folder = Path(results_folder)
+            self.results_folder.mkdir(exist_ok = True)
 
         # auto mixed precision
         from .amp import DynamicLossScaler, NoLossScaler, auto_mixed_precision
@@ -90,18 +94,14 @@ class Trainer(object):
         if not self.is_main_process:
             return
 
-        data = [
-            {'step': self.step},
-            {'model': self.model},
-            {'opt': self.opt},
-            {'ema': self.ema.state_dict()},
-            {'scaler': self.loss_scaler}
-        ]
+        append_dict = self.opt.parameters_dict()
+        append_dict['step'] = self.step
 
-        save_checkpoint(data, str(self.results_folder / f'model-{milestone}.ckpt'))
+        save_checkpoint(self.model, str(self.results_folder + f'/model-{milestone}.ckpt'),
+                        append_dict=append_dict)
 
     def load(self, milestone):
-        data = load_checkpoint(str(self.results_folder / f'model-{milestone}.ckpt'))
+        data = load_checkpoint(str(self.results_folder + f'/model-{milestone}.ckpt'))
 
         # model = self.accelerator.unwrap_model(self.model)
         # model.load_state_dict(data['model'])
@@ -147,27 +147,29 @@ class Trainer(object):
             for (data, noise) in data_iterator:
                 loss = train_step(data, noise)
                 total_loss += loss.asnumpy()
-                # if accelerator.is_main_process:
-                #     self.ema.to(device)
-                #     self.ema.update()
 
-                #     if self.step != 0 and self.step % self.save_and_sample_every == 0:
-                #         self.ema.ema_model.eval()
-
-                #         with torch.no_grad():
-                #             milestone = self.step // self.save_and_sample_every
-                #             batches = num_to_groups(self.num_samples, self.batch_size)
-                #             all_images_list = list(map(lambda n: self.ema.ema_model.sample(batch_size=n), batches))
-
-                #         all_images = torch.cat(all_images_list, dim = 0)
-                #         utils.save_image(all_images, str(self.results_folder / f'sample-{milestone}.png'), nrow = int(math.sqrt(self.num_samples)))
-                #         self.save(milestone)
                 self.step += 1
                 if self.step % self.gradient_accumulate_every == 0:
                     pbar.set_description(f'loss: {total_loss:.4f}')
                     pbar.update(1)
                     total_loss = 0.
+
+                if self.is_main_process:
+                #     self.ema.to(device)
+                #     self.ema.update()
+                    accumulate_step = self.step // self.gradient_accumulate_every
+                    accumulate_remain_step = self.step % self.gradient_accumulate_every
+                    if accumulate_step != 0 and \
+                        accumulate_step % self.save_and_sample_every == 0 and \
+                        accumulate_remain_step == (self.gradient_accumulate_every - 1):
+                        # self.ema.ema_model.eval()
+                        # batches = num_to_groups(self.num_samples, self.batch_size)
+                        # all_images_list = list(map(lambda n: self.ema.ema_model.sample(batch_size=n), batches))
+
+                        # all_images = torch.cat(all_images_list, dim = 0)
+                        # utils.save_image(all_images, str(self.results_folder / f'sample-{milestone}.png'), nrow = int(math.sqrt(self.num_samples)))
+                        self.save(accumulate_step)
                 if self.step >= self.gradient_accumulate_every * self.train_num_steps:
                     break
 
-        # accelerator.print('training complete')
+        print('training complete')
