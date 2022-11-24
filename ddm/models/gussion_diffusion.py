@@ -242,12 +242,12 @@ class GaussianDiffusion(nn.Cell):
             alpha = self.alphas_cumprod[time]
             alpha_next = self.alphas_cumprod[time_next]
 
-            sigma = eta * ((1 - alpha / alpha_next) * (1 - alpha_next) / (1 - alpha)).sqrt()
-            c = (1 - alpha_next - sigma ** 2).sqrt()
+            sigma = eta * ops.sqrt(((1 - alpha / alpha_next) * (1 - alpha_next) / (1 - alpha)))
+            c = ops.sqrt((1 - alpha_next - sigma ** 2))
 
             noise = randn_like(img)
 
-            img = x_start * alpha_next.sqrt() + \
+            img = x_start * ops.sqrt(alpha_next) + \
                   c * pred_noise + \
                   sigma * noise
 
