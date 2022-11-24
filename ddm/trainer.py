@@ -6,6 +6,8 @@ from mindspore import nn, ops
 from mindspore import ms_function, save_checkpoint, load_checkpoint, load_param_into_net
 from mindspore import set_auto_parallel_context
 from mindspore.communication import init, get_rank, get_group_size
+from mindspore.parallel._utils import _get_device_num, _get_gradients_mean
+
 from .dataset import create_dataset
 from .api import value_and_grad
 from .accumulator import Accumulator
@@ -48,6 +50,7 @@ class Trainer(object):
         if jit and akg:
             mindspore.set_context(enable_graph_kernel=True)
         # distributed training
+        self.distributed = distributed
         if distributed:
             init()
             rank_id = get_rank()
@@ -130,6 +133,13 @@ class Trainer(object):
         loss_scaler = self.loss_scaler
         grad_acc = self.gradient_accumulate_every
 
+        if self.distributed:
+            mean = _get_gradients_mean()
+            degree = _get_device_num()
+            grad_reducer = nn.DistributedGradReducer(self.opt.parameters, mean, degree)
+        else:
+            grad_reducer = nn.Identity()
+
         def forward_fn(data, noise):
             loss = model(data, noise)
             loss = loss_scaler.scale(loss)
@@ -139,6 +149,7 @@ class Trainer(object):
 
         def train_step(data, noise):
             loss, grads = grad_fn(data, noise)
+            grads = grad_reducer(grads)
             status = all_finite(grads)
             if status:
                 loss = loss_scaler.unscale(loss)
