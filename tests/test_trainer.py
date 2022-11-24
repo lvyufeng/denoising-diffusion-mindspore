@@ -21,7 +21,7 @@ def test_trainer():
     trainer = Trainer(
         diffusion,
         path,
-        train_batch_size = 1,
+        train_batch_size = 16,
         train_lr = 8e-5,
         train_num_steps = 110,         # total training steps
         gradient_accumulate_every = 2,    # gradient accumulation steps

@@ -9,9 +9,18 @@ from mindspore.communication import init, get_rank, get_group_size
 from .dataset import create_dataset
 from .api import value_and_grad
 from .accumulator import Accumulator
+from .utils import to_image
 
 def has_int_squareroot(num):
     return (math.sqrt(num) ** 2) == num
+
+def num_to_groups(num, divisor):
+    groups = num // divisor
+    remainder = num % divisor
+    arr = [divisor] * groups
+    if remainder > 0:
+        arr.append(remainder)
+    return arr
 
 class Trainer(object):
     def __init__(
@@ -145,8 +154,9 @@ class Trainer(object):
         with tqdm(initial = self.step, total = self.train_num_steps, disable = not self.is_main_process) as pbar:
             total_loss = 0.
             for (data, noise) in data_iterator:
+                model.set_train()
                 loss = train_step(data, noise)
-                total_loss += loss.asnumpy()
+                total_loss += float(loss.asnumpy())
 
                 self.step += 1
                 if self.step % self.gradient_accumulate_every == 0:
@@ -162,13 +172,17 @@ class Trainer(object):
                     if accumulate_step != 0 and \
                         accumulate_step % self.save_and_sample_every == 0 and \
                         accumulate_remain_step == (self.gradient_accumulate_every - 1):
-                        # self.ema.ema_model.eval()
-                        # batches = num_to_groups(self.num_samples, self.batch_size)
-                        # all_images_list = list(map(lambda n: self.ema.ema_model.sample(batch_size=n), batches))
-
-                        # all_images = torch.cat(all_images_list, dim = 0)
-                        # utils.save_image(all_images, str(self.results_folder / f'sample-{milestone}.png'), nrow = int(math.sqrt(self.num_samples)))
                         self.save(accumulate_step)
+
+                        model.set_train(False)
+
+                        batches = num_to_groups(self.num_samples, self.batch_size)
+                        print(batches)
+                        all_images_list = list(map(lambda n: model.sample(batch_size=n), batches))
+
+                        all_images = ops.concat(all_images_list, axis = 0)
+                        to_image(all_images, str(self.results_folder + f'/sample-{accumulate_step}.png'), nrow = int(math.sqrt(self.num_samples)))
+
                 if self.step >= self.gradient_accumulate_every * self.train_num_steps:
                     break
 

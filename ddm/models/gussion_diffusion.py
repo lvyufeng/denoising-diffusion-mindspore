@@ -1,4 +1,5 @@
 import math
+import numpy as np
 from tqdm import tqdm
 import mindspore
 import mindspore.numpy as mnp
@@ -213,7 +214,6 @@ class GaussianDiffusion(nn.Cell):
         for t in tqdm(reversed(range(0, self.num_timesteps)), desc = 'sampling loop time step', total = self.num_timesteps):
             self_cond = x_start if self.self_condition else None
             img, x_start = self.p_sample(img, Tensor(t, mindspore.int32), self_cond)
-            img = img.value()
 
         img = unnormalize_to_zero_to_one(img)
         return img
@@ -221,16 +221,17 @@ class GaussianDiffusion(nn.Cell):
     def ddim_sample(self, shape, clip_denoised = True):
         batch, total_timesteps, sampling_timesteps, eta, objective = shape[0], self.num_timesteps, self.sampling_timesteps, self.ddim_sampling_eta, self.objective
 
-        times = ops.linspace(-1, total_timesteps - 1, sampling_timesteps + 1)   # [-1, 0, 1, 2, ..., T-1] when sampling_timesteps == total_timesteps
-        times = list(reversed(times.asnumpy().tolist()))
+        times = np.linspace(-1, total_timesteps - 1, sampling_timesteps + 1).astype(np.int32)   # [-1, 0, 1, 2, ..., T-1] when sampling_timesteps == total_timesteps
+        times = list(reversed(times.tolist()))
         time_pairs = list(zip(times[:-1], times[1:])) # [(T-1, T-2), (T-2, T-3), ..., (1, 0), (0, -1)]
 
-        img = randn(shape)
+        img = Tensor(np.random.randn(*shape), mindspore.float32)
 
         x_start = None
 
         for time, time_next in tqdm(time_pairs, desc = 'sampling loop time step'):
-            time_cond = ops.fill(mindspore.int32, (batch,), time)
+            # time_cond = ops.fill(mindspore.int32, (batch,), time)
+            time_cond = Tensor(np.full((batch,), time), mindspore.int32)
             self_cond = x_start if self.self_condition else None
             pred_noise, x_start, *_ = self.model_predictions(img, time_cond, self_cond, clip_x_start = clip_denoised)
 
