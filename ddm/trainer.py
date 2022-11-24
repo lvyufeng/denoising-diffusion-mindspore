@@ -66,14 +66,6 @@ class Trainer(object):
             self.results_folder = Path(results_folder)
             self.results_folder.mkdir(exist_ok = True)
 
-        # auto mixed precision
-        from .amp import DynamicLossScaler, NoLossScaler, auto_mixed_precision
-        self.model = auto_mixed_precision(diffusion_model, amp_level)
-        if amp_level != 'O0':
-            self.loss_scaler = DynamicLossScaler(65536, 2, 1000)
-        else:
-            self.loss_scaler = NoLossScaler()
-
         assert has_int_squareroot(num_samples), 'number of samples must have an integer square root'
         self.num_samples = num_samples
         self.save_and_sample_every = save_and_sample_every
@@ -101,6 +93,8 @@ class Trainer(object):
         self.step = 0
         self.results_folder = results_folder
         self.jit = jit
+        self.model = diffusion_model
+        self.amp_level = amp_level
 
     def save(self, milestone):
         if not self.is_main_process:
@@ -126,19 +120,25 @@ class Trainer(object):
         #     self.accelerator.scaler.load_state_dict(data['scaler'])
 
     def train(self):
-        from .amp import all_finite
-
         model = self.model
         accumulator = self.accumulator
         loss_scaler = self.loss_scaler
         grad_acc = self.gradient_accumulate_every
+
+        # auto mixed precision
+        from .amp import DynamicLossScaler, NoLossScaler, auto_mixed_precision, all_finite
+        model = auto_mixed_precision(model, self.amp_level)
+        if self.amp_level != 'O0':
+            self.loss_scaler = DynamicLossScaler(65536, 2, 1000)
+        else:
+            self.loss_scaler = NoLossScaler()
 
         if self.distributed:
             mean = _get_gradients_mean()
             degree = _get_device_num()
             grad_reducer = nn.DistributedGradReducer(self.opt.parameters, mean, degree)
         else:
-            grad_reducer = nn.Identity()
+            grad_reducer = ops.identity
 
         def forward_fn(data, noise):
             loss = model(data, noise)
