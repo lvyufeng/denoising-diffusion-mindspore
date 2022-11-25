@@ -17,7 +17,7 @@ def randint(low, high, size, dtype=mindspore.int32):
 
 def random():
     uniform = _get_cache_prim(ops.UniformReal)()
-    return uniform(())
+    return uniform((1,))
 
 def randn_like(x, dtype=None):
     if dtype is None:

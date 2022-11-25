@@ -9,12 +9,14 @@ from mindspore import nn
 from mindspore import ops
 from mindspore import Tensor, Parameter, context, ms_class
 import mindspore.common.dtype as mstype
+from .modules import LayerNorm
 
 # For AMP white list
 amp_white_list = (
     nn.Dense,
     nn.LayerNorm,
-    nn.Conv2d
+    nn.Conv2d,
+    LayerNorm
 )
 
 amp_black_list = (

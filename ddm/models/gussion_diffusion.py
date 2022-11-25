@@ -2,10 +2,9 @@ import math
 import numpy as np
 from tqdm import tqdm
 import mindspore
-import mindspore.numpy as mnp
-from mindspore import nn, ops, ms_function, Tensor, mutable
+from mindspore import nn, ops, ms_function, Tensor
 from ..modules import default
-from ..ops import random, randint, randn, randn_like, cumprod
+from ..ops import random, randint, randn, randn_like
 
 def normalize_to_neg_one_to_one(img):
     return img * 2 - 1
@@ -113,9 +112,9 @@ class GaussianDiffusion(nn.Cell):
 
         # below: log calculation clipped because the posterior variance is 0 at the beginning of the diffusion chain
 
-        self.posterior_log_variance_clipped = np.log(np.clip(posterior_variance, 1e-20, None))
-        self.posterior_mean_coef1 = betas * np.sqrt(alphas_cumprod_prev) / (1. - alphas_cumprod)
-        self.posterior_mean_coef2 = (1. - alphas_cumprod_prev) * np.sqrt(alphas) / (1. - alphas_cumprod)
+        self.posterior_log_variance_clipped = Tensor(np.log(np.clip(posterior_variance, 1e-20, None)))
+        self.posterior_mean_coef1 = Tensor(betas * np.sqrt(alphas_cumprod_prev) / (1. - alphas_cumprod))
+        self.posterior_mean_coef2 = Tensor((1. - alphas_cumprod_prev) * np.sqrt(alphas) / (1. - alphas_cumprod))
 
         # calculate p2 reweighting
 
@@ -210,12 +209,14 @@ class GaussianDiffusion(nn.Cell):
         return pred_img, x_start
 
     def p_sample_loop(self, shape):
-        img = randn(shape)
+        img = np.random.randn(*shape).astype(np.float32)
         x_start = None
 
         for t in tqdm(reversed(range(0, self.num_timesteps)), desc = 'sampling loop time step', total = self.num_timesteps):
+            x_start = Tensor(x_start) if x_start is not None else x_start
             self_cond = x_start if self.self_condition else None
-            img, x_start = self.p_sample(img, Tensor(t, mindspore.int32), self_cond)
+            img, x_start = self.p_sample(Tensor(img), Tensor(t, mindspore.int32), self_cond)
+            img, x_start = img.asnumpy(), x_start.asnumpy()
 
         img = unnormalize_to_zero_to_one(img)
         return img
@@ -227,16 +228,15 @@ class GaussianDiffusion(nn.Cell):
         times = list(reversed(times.tolist()))
         time_pairs = list(zip(times[:-1], times[1:])) # [(T-1, T-2), (T-2, T-3), ..., (1, 0), (0, -1)]
 
-        img = Tensor(np.random.randn(*shape), mindspore.float32)
-
+        img = np.random.randn(*shape)
         x_start = None
 
         for time, time_next in tqdm(time_pairs, desc = 'sampling loop time step'):
             # time_cond = ops.fill(mindspore.int32, (batch,), time)
-            time_cond = Tensor(np.full((batch,), time), mindspore.int32)
-            self_cond = x_start if self.self_condition else None
-            pred_noise, x_start, *_ = self.model_predictions(img, time_cond, self_cond, clip_x_start = clip_denoised)
-
+            time_cond = np.full((batch,), time).astype(np.int32)
+            self_cond = Tensor(x_start) if self.self_condition else None
+            pred_noise, x_start, *_ = self.model_predictions(Tensor(img), Tensor(time_cond), self_cond, clip_x_start = clip_denoised)
+            pred_noise, x_start = pred_noise.asnumpy(), x_start.asnumpy()
             if time_next < 0:
                 img = x_start
                 continue
@@ -247,13 +247,14 @@ class GaussianDiffusion(nn.Cell):
             sigma = eta * np.sqrt(((1 - alpha / alpha_next) * (1 - alpha_next) / (1 - alpha)))
             c = np.sqrt((1 - alpha_next - sigma ** 2))
 
-            noise = randn_like(img)
+            noise = np.random.randn(*img.shape)
 
-            img = x_start * ops.sqrt(alpha_next) + \
+            img = x_start * np.sqrt(alpha_next) + \
                   c * pred_noise + \
                   sigma * noise
 
         img = unnormalize_to_zero_to_one(img)
+
         return img
 
     def sample(self, batch_size = 16):
@@ -290,15 +291,14 @@ class GaussianDiffusion(nn.Cell):
         # and condition with unet with that
         # this technique will slow down training by 25%, but seems to lower FID significantly
 
-        x_self_cond = None
         if self.self_condition and random() < 0.5:
             x_self_cond, _ = self.model_predictions(x, t)
             x_self_cond = ops.stop_gradient(x_self_cond)
-
+            model_out = self.model(x, t, x_self_cond)
+        else:
+            x_self_cond = None
+            model_out = self.model(x, t, x_self_cond)
         # predict and take gradient step
-
-        model_out = self.model(x, t, x_self_cond)
-        # print(model_out)
 
         if self.objective == 'pred_noise':
             target = noise

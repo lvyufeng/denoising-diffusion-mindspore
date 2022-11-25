@@ -1,8 +1,6 @@
 import math
 import pathlib
-import mindspore
-import mindspore.ops as ops
-import mindspore.numpy as mnp
+import numpy as np
 from PIL import Image
 from typing import BinaryIO, Union, Optional, Tuple
 
@@ -17,17 +15,17 @@ def make_grid(
 
     # if list of tensors, convert to a 4D mini-batch Tensor
     if isinstance(tensor, list):
-        tensor = mnp.stack(tensor, axis=0)
+        tensor = np.stack(tensor, axis=0)
 
     if tensor.ndim == 2:  # single image H x W
-        tensor = tensor.unsqueeze(0)
+        tensor = tensor.expand_dims(0)
     if tensor.ndim == 3:  # single image
         if tensor.shape[0] == 1:  # if single-channel, convert to 3-channel
-            tensor = mnp.concatenate((tensor, tensor, tensor), 0)
+            tensor = np.concatenate((tensor, tensor, tensor), 0)
         tensor = tensor.expand_dims(0)
 
     if tensor.ndim == 4 and tensor.shape[1] == 1:  # single-channel images
-        tensor = mnp.concatenate((tensor, tensor, tensor), 1)
+        tensor = np.concatenate((tensor, tensor, tensor), 1)
 
     if normalize is True:
         tensor_list = []  # avoid modifying tensor in-place
@@ -37,7 +35,7 @@ def make_grid(
             ), "value_range has to be a tuple (min, max) if specified. min and max are numbers"
 
         def norm_ip(img, low, high):
-            img = ops.clip_by_value(img, low, high)
+            img = np.clip(img, low, high)
             img = (img - low) / (max(high - low, 1e-5))
             return img
 
@@ -53,12 +51,12 @@ def make_grid(
         else:
             tensor_list = norm_range(tensor, value_range)
 
-        if isinstance(tensor_list, mindspore.Tensor):
+        if isinstance(tensor_list, np.ndarray):
             tensor = tensor_list
         else:
-            tensor = mnp.concatenate(tensor_list)
+            tensor = np.concatenate(tensor_list)
 
-    assert isinstance(tensor, mindspore.Tensor)
+    assert isinstance(tensor, np.ndarray)
     if tensor.shape[0] == 1:
         return tensor.squeeze(0)
 
@@ -68,7 +66,7 @@ def make_grid(
     ymaps = int(math.ceil(float(nmaps) / xmaps))
     height, width = int(tensor.shape[2] + padding), int(tensor.shape[3] + padding)
     num_channels = tensor.shape[1]
-    grid = mnp.full((num_channels, height * ymaps + padding, width * xmaps + padding), pad_value)
+    grid = np.full((num_channels, height * ymaps + padding, width * xmaps + padding), pad_value)
     k = 0
     for y in range(ymaps):
         for x in range(xmaps):
@@ -85,6 +83,6 @@ def to_image(tensor,
     grid = make_grid(tensor, **kwargs)
     # Add 0.5 after unnormalizing to [0, 255] to round to nearest integer
     ndarr = grid * 255 + 0.5
-    ndarr = ops.clip_by_value(ndarr, 0, 255).transpose(1, 2, 0).astype(mindspore.uint8).asnumpy()
+    ndarr = np.clip(ndarr, 0, 255).transpose(1, 2, 0).astype(np.uint8)
     im = Image.fromarray(ndarr)
     im.save(fp, format=format)

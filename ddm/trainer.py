@@ -1,6 +1,7 @@
 import math
 from tqdm import tqdm
 from pathlib import Path
+import numpy as np
 import mindspore
 from mindspore import nn, ops
 from mindspore import ms_function, save_checkpoint, load_checkpoint, load_param_into_net
@@ -190,7 +191,7 @@ class Trainer(object):
                         print(batches)
                         all_images_list = list(map(lambda n: model.sample(batch_size=n), batches))
 
-                        all_images = ops.concat(all_images_list, axis = 0)
+                        all_images = np.concatenate(all_images_list, axis = 0)
                         to_image(all_images, str(self.results_folder + f'/sample-{accumulate_step}.png'), nrow = int(math.sqrt(self.num_samples)))
 
                 if self.step >= self.gradient_accumulate_every * self.train_num_steps:

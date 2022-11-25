@@ -1,8 +1,5 @@
 from download import download
 from ddm import Unet, GaussianDiffusion, Trainer
-import mindspore
-
-# mindspore.set_context(mode=mindspore.PYNATIVE_MODE)
 
 def test_trainer():
     url = 'https://www.robots.ox.ac.uk/~vgg/data/flowers/102/102flowers.tgz'
@@ -26,11 +23,11 @@ def test_trainer():
         path,
         train_batch_size = 16,
         train_lr = 8e-5,
-        train_num_steps = 110,         # total training steps
+        train_num_steps = 100,         # total training steps
         gradient_accumulate_every = 2,    # gradient accumulation steps
         ema_decay = 0.995,                # exponential moving average decay
         amp_level = 'O1',                        # turn on mixed precision
-        save_and_sample_every=2
+        save_and_sample_every=10
     )
 
     trainer.train()

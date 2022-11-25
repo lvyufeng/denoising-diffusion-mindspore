@@ -17,7 +17,6 @@ setup(
     'mindspore'
   ],
   install_requires=[
-    'mindspore',
     'tqdm'
   ],
   classifiers=[
