@@ -22,7 +22,7 @@ def linear_beta_schedule(timesteps):
     scale = 1000 / timesteps
     beta_start = scale * 0.0001
     beta_end = scale * 0.02
-    return ops.linspace(Tensor(beta_start), Tensor(beta_end), timesteps).astype(mindspore.float32)
+    return np.linspace(beta_start, beta_end, timesteps, dty)
 
 def cosine_beta_schedule(timesteps, s = 0.008):
     """
@@ -30,11 +30,11 @@ def cosine_beta_schedule(timesteps, s = 0.008):
     as proposed in https://openreview.net/forum?id=-NEXDKk8gZ
     """
     steps = timesteps + 1
-    x = ops.linspace(Tensor(0, mindspore.float32), Tensor(timesteps, mindspore.float32), steps).astype(mindspore.float32)
-    alphas_cumprod = ops.cos(((x / timesteps) + s) / (1 + s) * math.pi * 0.5) ** 2
+    x = np.linspace(0, timesteps, steps).astype(np.float32)
+    alphas_cumprod = np.cos(((x / timesteps) + s) / (1 + s) * math.pi * 0.5) ** 2
     alphas_cumprod = alphas_cumprod / alphas_cumprod[0]
     betas = 1 - (alphas_cumprod[1:] / alphas_cumprod[:-1])
-    return betas.clip(0, 0.999)
+    return np.clip(betas, 0, 0.999)
 
 class GaussianDiffusion(nn.Cell):
     def __init__(
@@ -73,9 +73,9 @@ class GaussianDiffusion(nn.Cell):
             raise ValueError(f'unknown beta schedule {beta_schedule}')
 
         alphas = 1. - betas
-        alphas_cumprod = cumprod(alphas, dim=0)
+        alphas_cumprod = np.cumprod(alphas, axis=0)
         # alphas_cumprod_prev = F.pad(alphas_cumprod[:-1], (1, 0), value = 1.)
-        alphas_cumprod_prev = mnp.pad(alphas_cumprod[:-1], (1, 0), constant_values = 1)
+        alphas_cumprod_prev = np.pad(alphas_cumprod[:-1], (1, 0), constant_values = 1)
 
         timesteps, = betas.shape
         self.num_timesteps = int(timesteps)
@@ -97,11 +97,11 @@ class GaussianDiffusion(nn.Cell):
 
         # calculations for diffusion q(x_t | x_{t-1}) and others
 
-        self.sqrt_alphas_cumprod = ops.sqrt(alphas_cumprod)
-        self.sqrt_one_minus_alphas_cumprod = ops.sqrt(1. - alphas_cumprod)
-        self.log_one_minus_alphas_cumprod = ops.log(1. - alphas_cumprod)
-        self.sqrt_recip_alphas_cumprod = ops.sqrt(1. / alphas_cumprod)
-        self.sqrt_recipm1_alphas_cumprod = ops.sqrt(1. / alphas_cumprod - 1)
+        self.sqrt_alphas_cumprod = Tensor(np.sqrt(alphas_cumprod))
+        self.sqrt_one_minus_alphas_cumprod = Tensor(np.sqrt(1. - alphas_cumprod))
+        self.log_one_minus_alphas_cumprod = Tensor(np.log(1. - alphas_cumprod))
+        self.sqrt_recip_alphas_cumprod = Tensor(np.sqrt(1. / alphas_cumprod))
+        self.sqrt_recipm1_alphas_cumprod = Tensor(np.sqrt(1. / alphas_cumprod - 1))
 
         # calculations for posterior q(x_{t-1} | x_t, x_0)
 
@@ -109,17 +109,18 @@ class GaussianDiffusion(nn.Cell):
 
         # above: equal to 1. / (1. / (1. - alpha_cumprod_tm1) + alpha_t / beta_t)
 
-        self.posterior_variance = posterior_variance
+        self.posterior_variance = Tensor(posterior_variance)
 
         # below: log calculation clipped because the posterior variance is 0 at the beginning of the diffusion chain
 
-        self.posterior_log_variance_clipped = ops.log(posterior_variance.clip(xmin=1e-20, xmax=None))
-        self.posterior_mean_coef1 = betas * ops.sqrt(alphas_cumprod_prev) / (1. - alphas_cumprod)
-        self.posterior_mean_coef2 = (1. - alphas_cumprod_prev) * ops.sqrt(alphas) / (1. - alphas_cumprod)
+        self.posterior_log_variance_clipped = np.log(np.clip(posterior_variance, 1e-20, None))
+        self.posterior_mean_coef1 = betas * np.sqrt(alphas_cumprod_prev) / (1. - alphas_cumprod)
+        self.posterior_mean_coef2 = (1. - alphas_cumprod_prev) * np.sqrt(alphas) / (1. - alphas_cumprod)
 
         # calculate p2 reweighting
 
-        self.p2_loss_weight = (p2_loss_weight_k + alphas_cumprod / (1 - alphas_cumprod)) ** -p2_loss_weight_gamma
+        p2_loss_weight = (p2_loss_weight_k + alphas_cumprod / (1 - alphas_cumprod)) ** -p2_loss_weight_gamma
+        self.p2_loss_weight = Tensor(p2_loss_weight)
 
         if self.loss_type == 'l1':
             self.loss_fn = nn.L1Loss('none')
@@ -161,6 +162,7 @@ class GaussianDiffusion(nn.Cell):
         posterior_log_variance_clipped = extract(self.posterior_log_variance_clipped, t, x_t.shape)
         return posterior_mean, posterior_variance, posterior_log_variance_clipped
 
+    @ms_function
     def model_predictions(self, x, t, x_self_cond = None, clip_x_start = False):
         model_output = self.model(x, t, x_self_cond)
 
@@ -242,8 +244,8 @@ class GaussianDiffusion(nn.Cell):
             alpha = self.alphas_cumprod[time]
             alpha_next = self.alphas_cumprod[time_next]
 
-            sigma = eta * ops.sqrt(((1 - alpha / alpha_next) * (1 - alpha_next) / (1 - alpha)))
-            c = ops.sqrt((1 - alpha_next - sigma ** 2))
+            sigma = eta * np.sqrt(((1 - alpha / alpha_next) * (1 - alpha_next) / (1 - alpha)))
+            c = np.sqrt((1 - alpha_next - sigma ** 2))
 
             noise = randn_like(img)
 

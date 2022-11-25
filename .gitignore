@@ -133,3 +133,4 @@ MNIST_Data/
 akg_kernel_meta/
 *.key
 results/
+kernel_meta/

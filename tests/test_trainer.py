@@ -1,5 +1,8 @@
 from download import download
 from ddm import Unet, GaussianDiffusion, Trainer
+import mindspore
+
+# mindspore.set_context(mode=mindspore.PYNATIVE_MODE)
 
 def test_trainer():
     url = 'https://www.robots.ox.ac.uk/~vgg/data/flowers/102/102flowers.tgz'

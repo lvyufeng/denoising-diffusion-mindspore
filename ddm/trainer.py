@@ -122,16 +122,15 @@ class Trainer(object):
     def train(self):
         model = self.model
         accumulator = self.accumulator
-        loss_scaler = self.loss_scaler
         grad_acc = self.gradient_accumulate_every
 
         # auto mixed precision
         from .amp import DynamicLossScaler, NoLossScaler, auto_mixed_precision, all_finite
         model = auto_mixed_precision(model, self.amp_level)
         if self.amp_level != 'O0':
-            self.loss_scaler = DynamicLossScaler(65536, 2, 1000)
+            loss_scaler = DynamicLossScaler(65536, 2, 1000)
         else:
-            self.loss_scaler = NoLossScaler()
+            loss_scaler = NoLossScaler()
 
         if self.distributed:
             mean = _get_gradients_mean()
