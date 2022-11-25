@@ -205,7 +205,7 @@ class GaussianDiffusion(nn.Cell):
         batched_times = ops.ones((x.shape[0],), mindspore.int32) * t
         model_mean, _, model_log_variance, x_start = self.p_mean_variance(x = x, t = batched_times, x_self_cond = x_self_cond, clip_denoised = clip_denoised)
         noise = randn_like(x) if t > 0 else ops.zeros_like(x) # no noise if t == 0
-        pred_img = model_mean + (0.5 * model_log_variance).exp() * noise
+        pred_img = ops.exp(model_mean + (0.5 * model_log_variance)) * noise
         return pred_img, x_start
 
     def p_sample_loop(self, shape):
@@ -283,7 +283,7 @@ class GaussianDiffusion(nn.Cell):
             extract(self.sqrt_one_minus_alphas_cumprod, t, x_start.shape) * noise
         )
 
-    def p_losses(self, x_start, t, noise):
+    def p_losses(self, x_start, t, noise, random_cond):
         # noise sample
         x = self.q_sample(x_start = x_start, t = t, noise = noise)
 
@@ -291,14 +291,16 @@ class GaussianDiffusion(nn.Cell):
         # and condition with unet with that
         # this technique will slow down training by 25%, but seems to lower FID significantly
 
-        if self.self_condition and random() < 0.5:
-            x_self_cond, _ = self.model_predictions(x, t)
-            x_self_cond = ops.stop_gradient(x_self_cond)
-            model_out = self.model(x, t, x_self_cond)
+        if self.self_condition:
+            if random_cond:
+                x_self_cond, _ = self.model_predictions(x, t)
+                x_self_cond = ops.stop_gradient(x_self_cond)
+            else:
+                x_self_cond = ops.zeros_like(x)
         else:
-            x_self_cond = None
-            model_out = self.model(x, t, x_self_cond)
+            x_self_cond = ops.zeros_like(x)
         # predict and take gradient step
+        model_out = self.model(x, t, x_self_cond)
 
         if self.objective == 'pred_noise':
             target = noise
@@ -319,9 +321,9 @@ class GaussianDiffusion(nn.Cell):
         loss = loss * extract(self.p2_loss_weight, t, loss.shape)
         return loss.mean()
 
-    def construct(self, img, noise):
+    def construct(self, img, noise, random_cond):
         b = img.shape[0]
         t = randint(0, self.num_timesteps, (b,))
 
         img = normalize_to_neg_one_to_one(img)
-        return self.p_losses(img, t, noise)
+        return self.p_losses(img, t, noise, random_cond)

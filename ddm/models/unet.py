@@ -92,7 +92,7 @@ class Unet(nn.Cell):
         self.final_res_block = block_klass(dim * 2, dim, time_emb_dim = time_dim)
         self.final_conv = Conv2d(dim, self.out_dim, 1, pad_mode='valid', has_bias=True)
 
-    def construct(self, x, time, x_self_cond = None):
+    def construct(self, x, time, x_self_cond):
         if self.self_condition:
             if x_self_cond is None:
                 x_self_cond = ops.zeros_like(x)

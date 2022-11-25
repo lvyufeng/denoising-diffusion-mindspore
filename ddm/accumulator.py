@@ -23,9 +23,9 @@ class Accumulator():
             clip_grads = ops.clip_by_global_norm(self.inner_grads, self.clip_norm)
             # clip_grads, _ = clip_grad_norm(self.inner_grads, self.clip_norm)
             self.optimizer(clip_grads)
-            success = self.map(ops.partial(ops.assign), self.inner_grads, self.zeros)
+            success = self.map(self.partial(ops.assign), self.inner_grads, self.zeros)
         else:
-            success = self.map(ops.partial(ops.assign_add), self.inner_grads, grads)
+            success = self.map(self.partial(ops.assign_add), self.inner_grads, grads)
         # for last step which can not be divided by accumulate_step
         if self.total_step is not None and self.counter == self.total_step:
             clip_grads = ops.clip_by_global_norm(self.inner_grads, self.clip_norm)
