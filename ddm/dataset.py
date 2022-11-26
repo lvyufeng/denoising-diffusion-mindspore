@@ -6,6 +6,7 @@ import numpy as np
 def create_dataset(folder, image_size, exts = ['.jpg', '.jpeg', '.png', '.tiff'], \
                    augment_horizontal_flip=False, batch_size=32, num_shards=1, shard_id=0, \
                    shuffle=True, num_workers=cpu_count(), drop_remainder=False):
+    num_workers = num_workers // num_shards
     dataset = ImageFolderDataset(folder, num_parallel_workers=num_workers, shuffle=False, \
                                  extensions=exts ,num_shards=num_shards, shard_id=shard_id, decode=True)
     transfroms = [

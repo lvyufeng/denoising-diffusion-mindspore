@@ -1,3 +1,4 @@
+import os
 import math
 from tqdm import tqdm
 from pathlib import Path
@@ -49,6 +50,8 @@ class Trainer(object):
         distributed = False,
     ):
         super().__init__()
+        device_id = int(os.getenv('DEVICE_ID', "0"))
+        mindspore.set_context(device_id=device_id)
         if jit and akg:
             mindspore.set_context(enable_graph_kernel=True)
         # distributed training
