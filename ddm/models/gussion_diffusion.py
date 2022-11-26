@@ -192,7 +192,7 @@ class GaussianDiffusion(nn.Cell):
         return pred_noise, x_start
 
     def p_mean_variance(self, x, t, x_self_cond = None, clip_denoised = True):
-        x_start, _ = self.model_predictions(x, t, x_self_cond)
+        _, x_start = self.model_predictions(x, t, x_self_cond)
 
         if clip_denoised:
             x_start.clip(-1., 1.)
@@ -205,7 +205,7 @@ class GaussianDiffusion(nn.Cell):
         batched_times = ops.ones((x.shape[0],), mindspore.int32) * t
         model_mean, _, model_log_variance, x_start = self.p_mean_variance(x = x, t = batched_times, x_self_cond = x_self_cond, clip_denoised = clip_denoised)
         noise = randn_like(x) if t > 0 else ops.zeros_like(x) # no noise if t == 0
-        pred_img = ops.exp(model_mean + (0.5 * model_log_variance)) * noise
+        pred_img = model_mean + ops.exp(0.5 * model_log_variance) * noise
         return pred_img, x_start
 
     def p_sample_loop(self, shape):
@@ -228,14 +228,15 @@ class GaussianDiffusion(nn.Cell):
         times = list(reversed(times.tolist()))
         time_pairs = list(zip(times[:-1], times[1:])) # [(T-1, T-2), (T-2, T-3), ..., (1, 0), (0, -1)]
 
-        img = np.random.randn(*shape)
+        img = np.random.randn(*shape).astype(np.float32)
         x_start = None
 
         for time, time_next in tqdm(time_pairs, desc = 'sampling loop time step'):
             # time_cond = ops.fill(mindspore.int32, (batch,), time)
             time_cond = np.full((batch,), time).astype(np.int32)
-            self_cond = Tensor(x_start) if self.self_condition else None
-            pred_noise, x_start, *_ = self.model_predictions(Tensor(img), Tensor(time_cond), self_cond, clip_x_start = clip_denoised)
+            x_start = Tensor(x_start) if x_start is not None else x_start
+            self_cond = x_start if self.self_condition else None
+            pred_noise, x_start, *_ = self.model_predictions(Tensor(img, mindspore.float32), Tensor(time_cond), self_cond, clip_denoised)
             pred_noise, x_start = pred_noise.asnumpy(), x_start.asnumpy()
             if time_next < 0:
                 img = x_start
@@ -245,7 +246,7 @@ class GaussianDiffusion(nn.Cell):
             alpha_next = self.alphas_cumprod[time_next]
 
             sigma = eta * np.sqrt(((1 - alpha / alpha_next) * (1 - alpha_next) / (1 - alpha)))
-            c = np.sqrt((1 - alpha_next - sigma ** 2))
+            c = np.sqrt(1 - alpha_next - sigma ** 2)
 
             noise = np.random.randn(*img.shape)
 
@@ -293,7 +294,7 @@ class GaussianDiffusion(nn.Cell):
 
         if self.self_condition:
             if random_cond:
-                x_self_cond, _ = self.model_predictions(x, t)
+                _, x_self_cond = self.model_predictions(x, t)
                 x_self_cond = ops.stop_gradient(x_self_cond)
             else:
                 x_self_cond = ops.zeros_like(x)

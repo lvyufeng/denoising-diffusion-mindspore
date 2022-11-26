@@ -26,7 +26,7 @@ def test_trainer():
         train_num_steps = 100,         # total training steps
         gradient_accumulate_every = 2,    # gradient accumulation steps
         ema_decay = 0.995,                # exponential moving average decay
-        amp_level = 'O1',                        # turn on mixed precision
+        amp_level = 'O0',                        # turn on mixed precision
         save_and_sample_every=10
     )
 
