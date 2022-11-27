@@ -13,15 +13,16 @@ def unnormalize_to_zero_to_one(t):
     return (t + 1) * 0.5
 
 def extract(a, t, x_shape):
-    b = t.shape[0]
-    out = a.gather_elements(-1, t)
-    return out.reshape(b, *((1,) * (len(x_shape) - 1)))
+    # b = t.shape[0]
+    # out = a.gather_elements(-1, t)
+    # return out.reshape(b, *((1,) * (len(x_shape) - 1)))
+    return a[t, None, None, None]
 
 def linear_beta_schedule(timesteps):
     scale = 1000 / timesteps
     beta_start = scale * 0.0001
     beta_end = scale * 0.02
-    return np.linspace(beta_start, beta_end, timesteps, dty)
+    return np.linspace(beta_start, beta_end, timesteps).astype(np.float32)
 
 def cosine_beta_schedule(timesteps, s = 0.008):
     """

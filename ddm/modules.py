@@ -4,7 +4,7 @@ import mindspore
 from mindspore import nn, ops, Tensor, Parameter
 from mindspore.common.initializer import initializer, Normal
 from .layers import Upsample, Conv2d, Dense
-from .ops import rsqrt, rearrange, softmax, bhdi_bhdj_bhij, bhij_bhdj_bhid
+from .ops import rsqrt, rearrange, softmax
 
 def exists(x):
     return x is not None
@@ -13,6 +13,14 @@ def default(val, d):
     if exists(val):
         return val
     return d() if callable(d) else d
+
+class BMM(nn.Cell):
+    def __init__(self):
+        super().__init__()
+        self.bmm = ops.BatchMatMul()
+
+    def construct(self, x, y):
+        return self.bmm(x, y)
 
 class Residual(nn.Cell):
     def __init__(self, fn):
@@ -164,6 +172,7 @@ class LinearAttention(nn.Cell):
 
         self.map = ops.Map()
         self.partial = ops.Partial()
+        self.bmm = BMM()
 
     def construct(self, x):
         b, c, h, w = x.shape
@@ -177,11 +186,11 @@ class LinearAttention(nn.Cell):
         v = v / (h * w)
 
         # 'b h d n, b h e n -> b h d e'
-        # context = (k.expand_dims(3) * v.expand_dims(2)).sum(-1)
-        context = bhij_bhdj_bhid(k, v)
+        context = self.bmm(k, v.swapaxes(2, 3))
+
         # 'b h d e, b h d n -> b h e n'
         # out = (context.expand_dims(-1) * q.expand_dims(-2)).sum(2)
-        out = bhdi_bhdj_bhij(context, q)
+        out = self.bmm(context.swapaxes(2, 3), q)
 
         out = out.reshape((b, -1, h, w))
         return self.to_out(out)
@@ -197,6 +206,7 @@ class Attention(nn.Cell):
         self.to_out = Conv2d(hidden_dim, dim, 1, pad_mode='valid', has_bias = True)
         self.map = ops.Map()
         self.partial = ops.Partial()
+        self.bmm = BMM()
 
     def construct(self, x):
         b, c, h, w = x.shape
@@ -207,11 +217,11 @@ class Attention(nn.Cell):
 
         # 'b h d i, b h d j -> b h i j'
         # sim = (q.expand_dims(-1) * k.expand_dims(-2)).sum(2)
-        sim = bhdi_bhdj_bhij(q, k)
+        sim = self.bmm(q.swapaxes(2, 3), k)
         attn = softmax(sim, axis=-1)
         # 'b h i j, b h d j -> b h i d'
         # out = (attn.expand_dims(3) * v.expand_dims(2)).sum(-1)
-        out = bhij_bhdj_bhid(attn, v)
+        out = self.bmm(attn, v.swapaxes(2, 3))
         # out = rearrange(out, 'b h (x y) d -> b (h d) x y', x = h, y = w)
         out = out.swapaxes(-1, -2).reshape((b, -1, h, w))
 
