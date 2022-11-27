@@ -22,6 +22,10 @@ class BMM(nn.Cell):
     def construct(self, x, y):
         return self.bmm(x, y)
 
+class Identity(nn.Cell):
+    def construct(self, inputs):
+        return inputs
+
 class Residual(nn.Cell):
     def __init__(self, fn):
         super().__init__()
@@ -144,7 +148,7 @@ class ResnetBlock(nn.Cell):
 
         self.block1 = Block(dim, dim_out, groups = groups)
         self.block2 = Block(dim_out, dim_out, groups = groups)
-        self.res_conv = Conv2d(dim, dim_out, 1, pad_mode='valid') if dim != dim_out else nn.Identity()
+        self.res_conv = Conv2d(dim, dim_out, 1, pad_mode='valid') if dim != dim_out else Identity()
 
     def construct(self, x, time_emb = None):
         scale_shift = None

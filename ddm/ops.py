@@ -41,8 +41,13 @@ def cumprod(input, dim, dtype=None):
     return output
 
 def softmax(x, axis=-1):
-    if not isinstance(axis, int):
-        type_axis = type(axis).__name__
-        raise TypeError(f" the type of 'axis' must be 'int', but got '{axis}' with type '{type_axis}'.")
-    softmax_ = _get_cache_prim(ops.Softmax)(axis=axis)
-    return softmax_(x)
+    if gpu_target:
+        softmax_ = _get_cache_prim(ops.Softmax)(axis=axis)
+        return softmax_(x)
+    exp_ = _get_cache_prim(ops.Exp)()
+    reduce_sum_ = _get_cache_prim(ops.ReduceSum)(True)
+
+    x_max = x.max(axis=axis, keepdims=True)
+    x_exp = exp_(x - x_max)
+    partion = reduce_sum_(x_exp, axis)
+    return x_exp / partion
