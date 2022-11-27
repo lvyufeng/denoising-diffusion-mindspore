@@ -1,6 +1,8 @@
 import mindspore
-from mindspore import ops, Tensor
+from mindspore import ops, Tensor, context
 from mindspore.ops._primitive_cache import _get_cache_prim
+
+gpu_target = (context.get_context("device_target") == "GPU")
 
 def rsqrt(x):
     rsqrt_op = _get_cache_prim(ops.Rsqrt)()
@@ -44,3 +46,25 @@ def softmax(x, axis=-1):
         raise TypeError(f" the type of 'axis' must be 'int', but got '{axis}' with type '{type_axis}'.")
     softmax_ = _get_cache_prim(ops.Softmax)(axis=axis)
     return softmax_(x)
+
+def bhdi_bhdj_bhij_old(x, y):
+    if gpu_target:
+        einsum = _get_cache_prim(ops.Einsum)('b h d i, b h d j -> b h i j')
+        return einsum((x, y))
+    else:
+        return (x.expand_dims(-1) * y.expand_dims(-2)).sum(2)
+
+def bhdi_bhdj_bhij(x, y):
+    bmm = _get_cache_prim(ops.BatchMatMul)()
+    return bmm(x.swapaxes(2, 3), y)
+
+def bhij_bhdj_bhid_old(x, y):
+    if gpu_target:
+        einsum = _get_cache_prim(ops.Einsum)('b h i j, b h d j -> b h i d')
+        return einsum((x, y))
+    else:
+        return (x.expand_dims(3) * y.expand_dims(2)).sum(-1)
+
+def bhij_bhdj_bhid(x, y):
+    bmm = _get_cache_prim(ops.BatchMatMul)()
+    return bmm(x, y.swapaxes(2, 3))

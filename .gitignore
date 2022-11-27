@@ -134,3 +134,5 @@ akg_kernel_meta/
 *.key
 results/
 kernel_meta/
+test.py
+profiler/

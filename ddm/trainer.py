@@ -5,7 +5,7 @@ from pathlib import Path
 import numpy as np
 import mindspore
 import random
-from mindspore import nn, ops
+from mindspore import nn, ops, Tensor
 from mindspore import ms_function, save_checkpoint, load_checkpoint, load_param_into_net
 from mindspore import set_auto_parallel_context
 from mindspore.communication import init, get_rank, get_group_size
@@ -128,7 +128,8 @@ class Trainer(object):
         model = self.model
         accumulator = self.accumulator
         grad_acc = self.gradient_accumulate_every
-
+        self_condition = model.self_condition
+        num_timesteps = model.num_timesteps
         # auto mixed precision
         from .amp import DynamicLossScaler, NoLossScaler, auto_mixed_precision, all_finite
         model = auto_mixed_precision(model, self.amp_level)
@@ -144,15 +145,15 @@ class Trainer(object):
         else:
             grad_reducer = ops.identity
 
-        def forward_fn(data, noise, self_cond):
-            loss = model(data, noise, self_cond)
+        def forward_fn(data, t, noise, self_cond):
+            loss = model(data, t, noise, self_cond)
             loss = loss_scaler.scale(loss)
             return loss / grad_acc
 
         grad_fn = value_and_grad(forward_fn, None, self.opt.parameters)
 
-        def train_step(data, noise, self_cond):
-            loss, grads = grad_fn(data, noise, self_cond)
+        def train_step(data, t, noise, self_cond):
+            loss, grads = grad_fn(data, t, noise, self_cond)
             grads = grad_reducer(grads)
             status = all_finite(grads)
             if status:
@@ -170,8 +171,10 @@ class Trainer(object):
             total_loss = 0.
             for (data, noise) in data_iterator:
                 model.set_train()
-                self_cond = random.random() < 0.5
-                loss = train_step(data, noise, self_cond)
+                self_cond = random.random() < 0.5 if self_condition else False
+                b = data.shape[0]
+                t = Tensor(np.random.randint(0, num_timesteps, (b,)).astype(np.int32))
+                loss = train_step(data, t, noise, self_cond)
                 total_loss += float(loss.asnumpy())
 
                 self.step += 1

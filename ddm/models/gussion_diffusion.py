@@ -322,9 +322,9 @@ class GaussianDiffusion(nn.Cell):
         loss = loss * extract(self.p2_loss_weight, t, loss.shape)
         return loss.mean()
 
-    def construct(self, img, noise, random_cond):
-        b = img.shape[0]
-        t = randint(0, self.num_timesteps, (b,))
+    def construct(self, img, t, noise, random_cond):
+        # b = img.shape[0]
+        # t = randint(0, self.num_timesteps, (b,))
 
         img = normalize_to_neg_one_to_one(img)
         return self.p_losses(img, t, noise, random_cond)
