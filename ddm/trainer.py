@@ -52,8 +52,9 @@ class Trainer(object):
         super().__init__()
         device_id = int(os.getenv('DEVICE_ID', "0"))
         mindspore.set_context(device_id=device_id)
-        if jit and akg:
-            mindspore.set_context(enable_graph_kernel=True)
+        backend = mindspore.get_context('device_target')
+        if jit and akg and backend != 'Ascend':
+            mindspore.set_context(enable_graph_kernel=True, graph_kernel_flags="--opt_level=1")
         # distributed training
         self.distributed = distributed
         if distributed:
@@ -65,7 +66,7 @@ class Trainer(object):
         else:
             rank_id = 0
             rank_size = 1
-        
+
         self.is_main_process = True if rank_id == 0 else False
         if self.is_main_process:
             self.results_folder = Path(results_folder)

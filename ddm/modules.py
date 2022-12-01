@@ -49,7 +49,7 @@ class WeightStandardizedConv2d(Conv2d):
     weight standardization purportedly works synergistically with group normalization
     """
     def construct(self, x):
-        eps = 1e-5 if x.dtype == mindspore.float32 else 1e-3
+        eps = 1e-5
 
         weight = self.weight
         mean = weight.mean((1, 2, 3), keep_dims=True)
@@ -67,7 +67,7 @@ class LayerNorm(nn.Cell):
         self.g = Parameter(initializer('ones', (1, dim, 1, 1)), name='g')
 
     def construct(self, x):
-        eps = 1e-5 if x.dtype == mindspore.float32 else 1e-3
+        eps = 1e-5
         var = x.var(1, keepdims=True)
         mean = x.mean(1, keep_dims=True)
         return (x - mean) * rsqrt((var + eps)) * self.g

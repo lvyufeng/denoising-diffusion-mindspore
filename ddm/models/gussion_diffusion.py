@@ -4,7 +4,7 @@ from tqdm import tqdm
 import mindspore
 from mindspore import nn, ops, ms_function, Tensor
 from ..modules import default
-from ..ops import random, randint, randn, randn_like
+from ..ops import randn_like
 
 def normalize_to_neg_one_to_one(img):
     return img * 2 - 1
@@ -318,8 +318,7 @@ class GaussianDiffusion(nn.Cell):
 
         loss = self.loss_fn(model_out, target)
         # loss = reduce(loss, 'b ... -> b (...)', 'mean')
-        reduce_rank = [i for i in range(1, loss.ndim)]
-        loss = ops.reduce_mean(loss, reduce_rank)
+        loss = loss.reshape(loss.shape[0], -1)
         loss = loss * extract(self.p2_loss_weight, t, loss.shape)
         return loss.mean()
 

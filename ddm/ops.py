@@ -221,7 +221,7 @@ def normalize_axis_index(axis, ndim):
     elif axis < 0 and axis >= -ndim:
         return ndim + axis
     else:
-        raise_value_error('axis is out of range.')
+        return axis
 
 def moveaxis(x, source, destination):
     perm = [i for i in range(x.ndim)]
@@ -249,7 +249,7 @@ def clip_grad_norm(grads, max_norm: float, norm_type: float = 2.0):
             norms += (norm(grad, norm_type),)
         total_norm = norm(ops.stack(norms), norm_type)
 
-    clip_coef = max_norm / (total_norm + 1e-6)
+    clip_coef = ops.div(max_norm, (total_norm + ops.scalar_to_tensor(1e-6, mindspore.float32)))
     # Note: multiplying by the clamped coef is redundant when the coef is clamped to 1, but doing so
     # avoids a `if clip_coef < 1:` conditional which can require a CPU <=> device synchronization
     # when the gradients do not reside in CPU memory.
