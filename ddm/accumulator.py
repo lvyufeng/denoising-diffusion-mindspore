@@ -19,18 +19,14 @@ class Accumulator():
         self.partial = ops.Partial()
     
     def __call__(self, grads):
+        success = self.map(self.partial(ops.assign_add), self.inner_grads, grads)
         if self.counter % self.accumulate_step == 0:
-            clip_grads = ops.clip_by_global_norm(self.inner_grads, self.clip_norm)
+            divided_grads = self.map(self.partial(ops.div, y=self.accumulate_step), self.inner_grads)
+            clip_grads = ops.clip_by_global_norm(divided_grads, self.clip_norm)
             # clip_grads, _ = clip_grad_norm(self.inner_grads, self.clip_norm)
             self.optimizer(clip_grads)
             success = self.map(self.partial(ops.assign), self.inner_grads, self.zeros)
-        else:
-            success = self.map(self.partial(ops.assign_add), self.inner_grads, grads)
-        # for last step which can not be divided by accumulate_step
-        if self.total_step is not None and self.counter == self.total_step:
-            clip_grads = ops.clip_by_global_norm(self.inner_grads, self.clip_norm)
-            # clip_grads, _ = clip_grad_norm(self.inner_grads, self.clip_norm)
-            self.optimizer(clip_grads)
+
         ops.assign_add(self.counter, Tensor(1, mindspore.int32))
 
         return success

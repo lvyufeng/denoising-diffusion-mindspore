@@ -130,6 +130,7 @@ class Trainer(object):
         grad_acc = self.gradient_accumulate_every
         self_condition = model.self_condition
         num_timesteps = model.num_timesteps
+        optimizer = self.opt
         # auto mixed precision
         from .amp import DynamicLossScaler, NoLossScaler, auto_mixed_precision, all_finite
         model = auto_mixed_precision(model, self.amp_level)
@@ -148,7 +149,7 @@ class Trainer(object):
         def forward_fn(data, t, noise, self_cond):
             loss = model(data, t, noise, self_cond)
             loss = loss_scaler.scale(loss)
-            return loss / grad_acc
+            return loss
 
         grad_fn = value_and_grad(forward_fn, None, self.opt.parameters)
 
@@ -160,8 +161,10 @@ class Trainer(object):
                 loss = loss_scaler.unscale(loss)
                 grads = loss_scaler.unscale(grads)
                 loss = ops.depend(loss, accumulator(grads))
+                # grads = ops.clip_by_global_norm(grads, 1.0)
+                # loss = ops.depend(loss, optimizer(grads))
             loss_scaler.adjust(status)
-            return loss
+            return loss / grad_acc
 
         if self.jit:
             train_step = ms_function(train_step)
