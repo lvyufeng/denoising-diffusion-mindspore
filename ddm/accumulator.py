@@ -1,5 +1,6 @@
 import mindspore
 from mindspore import ms_class, Tensor, Parameter, ops
+from .ops import clip_grad_norm
 
 @ms_class
 class Accumulator():
@@ -21,9 +22,7 @@ class Accumulator():
     def __call__(self, grads):
         success = self.map(self.partial(ops.assign_add), self.inner_grads, grads)
         if self.counter % self.accumulate_step == 0:
-            divided_grads = self.map(self.partial(ops.div, y=self.accumulate_step), self.inner_grads)
-            clip_grads = ops.clip_by_global_norm(divided_grads, self.clip_norm)
-            # clip_grads, _ = clip_grad_norm(self.inner_grads, self.clip_norm)
+            clip_grads, _ = clip_grad_norm(self.inner_grads, self.clip_norm)
             self.optimizer(clip_grads)
             success = self.map(self.partial(ops.assign), self.inner_grads, self.zeros)
 

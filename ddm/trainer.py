@@ -148,6 +148,7 @@ class Trainer(object):
 
         def forward_fn(data, t, noise, self_cond):
             loss = model(data, t, noise, self_cond)
+            loss = loss / grad_acc
             loss = loss_scaler.scale(loss)
             return loss
 
@@ -164,7 +165,7 @@ class Trainer(object):
                 # grads = ops.clip_by_global_norm(grads, 1.0)
                 # loss = ops.depend(loss, optimizer(grads))
             loss_scaler.adjust(status)
-            return loss / grad_acc
+            return loss
 
         if self.jit:
             train_step = ms_function(train_step)
