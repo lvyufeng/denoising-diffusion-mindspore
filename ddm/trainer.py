@@ -188,13 +188,13 @@ class Trainer(object):
 
                 self.step += 1
                 if self.step % self.gradient_accumulate_every == 0:
+                    if self.is_main_process:
+                        self.ema.update()
                     pbar.set_description(f'loss: {total_loss:.4f}')
                     pbar.update(1)
                     total_loss = 0.
 
                 if self.is_main_process:
-                #     self.ema.to(device)
-                    self.ema.update()
                     accumulate_step = self.step // self.gradient_accumulate_every
                     accumulate_remain_step = self.step % self.gradient_accumulate_every
                     if accumulate_step != 0 and \

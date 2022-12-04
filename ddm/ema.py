@@ -58,8 +58,8 @@ class EMA(nn.Cell):
 
         self.ignore_names = ignore_names
 
-        self.initted = Parameter(Tensor([False]), 'initted')
-        self.step = Parameter(Tensor([0], mindspore.int32), 'step')
+        self.initted = Parameter(Tensor(False), 'initted')
+        self.step = Parameter(Tensor(0, mindspore.int32), 'step')
 
         self.map = ops.HyperMap()
 
@@ -78,22 +78,20 @@ class EMA(nn.Cell):
 
     @ms_function
     def update(self):
-        ops.assign_add(self.step, Tensor(1, mindspore.int32))
-
+        success = ops.assign_add(self.step, Tensor(1, mindspore.int32))
         if (self.step % self.update_every) != 0:
-            return True
-
+            return success
         if self.step <= self.update_after_step:
-            self.copy_params_from_model_to_ema()
-            return True
+            success = ops.depend(success, self.copy_params_from_model_to_ema())
+            return success
 
         if not self.initted:
-            self.copy_params_from_model_to_ema()
-            ops.assign(self.initted, Tensor([True]))
+            success = ops.depend(success, self.copy_params_from_model_to_ema())
+            ops.assign(self.initted, Tensor(True))
 
-        success = self.update_moving_average()
+        success = ops.depend(success, self.update_moving_average())
 
-        return True
+        return success
 
     def update_moving_average(self):
         def moving_average(current_decay, ma_param, current_param):
@@ -102,6 +100,7 @@ class EMA(nn.Cell):
             return ops.assign(ma_param, ma_param - difference)
 
         current_decay = self.get_current_decay()
+
         success = self.map(ops.partial(moving_average, current_decay), self.ema_params, self.online_params)
         return success
 
