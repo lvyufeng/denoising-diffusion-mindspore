@@ -15,15 +15,11 @@ def create_dataset(folder, image_size, exts = ['.jpg', '.jpeg', '.png', '.tiff']
         ToTensor()
     ]
 
-    def gen_noise(image):
-        return image, np.random.randn(*image.shape).astype(image.dtype)
-
     dataset = dataset.project('image')
     if augment_horizontal_flip:
         transfroms.insert(1, RandomHorizontalFlip())
 
     dataset = dataset.map(transfroms, 'image')
-    dataset = dataset.map(gen_noise, 'image', ['image', 'noise'], ['image', 'noise'])
     if shuffle:
         dataset = dataset.shuffle(1024)
     dataset = dataset.batch(batch_size, drop_remainder=drop_remainder)

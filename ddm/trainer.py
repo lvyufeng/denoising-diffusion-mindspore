@@ -15,6 +15,7 @@ from .dataset import create_dataset
 from .api import value_and_grad
 from .accumulator import Accumulator
 from .utils import to_image
+from .ema import EMA
 
 def has_int_squareroot(num):
     return (math.sqrt(num) ** 2) == num
@@ -69,6 +70,8 @@ class Trainer(object):
 
         self.is_main_process = True if rank_id == 0 else False
         if self.is_main_process:
+            self.ema = EMA(diffusion_model, beta = ema_decay, update_every = ema_update_every)
+
             self.results_folder = Path(results_folder)
             self.results_folder.mkdir(exist_ok = True)
 
@@ -131,7 +134,7 @@ class Trainer(object):
         grad_acc = self.gradient_accumulate_every
         self_condition = model.self_condition
         num_timesteps = model.num_timesteps
-        optimizer = self.opt
+
         # auto mixed precision
         from .amp import DynamicLossScaler, NoLossScaler, auto_mixed_precision, all_finite
         model = auto_mixed_precision(model, self.amp_level)
@@ -174,11 +177,12 @@ class Trainer(object):
         data_iterator = self.ds.create_tuple_iterator()
         with tqdm(initial = self.step, total = self.train_num_steps, disable = not self.is_main_process) as pbar:
             total_loss = 0.
-            for (data, noise) in data_iterator:
+            for (data,) in data_iterator:
                 model.set_train()
                 self_cond = random.random() < 0.5 if self_condition else False
                 b = data.shape[0]
                 t = Tensor(np.random.randint(0, num_timesteps, (b,)).astype(np.int32))
+                noise = Tensor(np.random.randn(*data.shape), mindspore.float32)
                 loss = train_step(data, t, noise, self_cond)
                 total_loss += float(loss.asnumpy())
 
@@ -190,22 +194,23 @@ class Trainer(object):
 
                 if self.is_main_process:
                 #     self.ema.to(device)
-                #     self.ema.update()
+                    self.ema.update()
                     accumulate_step = self.step // self.gradient_accumulate_every
                     accumulate_remain_step = self.step % self.gradient_accumulate_every
                     if accumulate_step != 0 and \
                         accumulate_step % self.save_and_sample_every == 0 and \
                         accumulate_remain_step == (self.gradient_accumulate_every - 1):
-                        self.save(accumulate_step)
 
-                        model.set_train(False)
+                        self.ema.set_train(False)
+                        self.ema.synchronise()
 
                         batches = num_to_groups(self.num_samples, self.batch_size)
-                        print(batches)
-                        all_images_list = list(map(lambda n: model.sample(batch_size=n), batches))
+                        all_images_list = list(map(lambda n: self.ema.online_model.sample(batch_size=n), batches))
 
                         all_images = np.concatenate(all_images_list, axis = 0)
                         to_image(all_images, str(self.results_folder + f'/sample-{accumulate_step}.png'), nrow = int(math.sqrt(self.num_samples)))
+
+                        self.save(accumulate_step)
 
                 if self.step >= self.gradient_accumulate_every * self.train_num_steps:
                     break
