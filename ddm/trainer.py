@@ -168,7 +168,7 @@ class Trainer(object):
                 loss = ops.depend(loss, accumulator(grads))
                 # grads = ops.clip_by_global_norm(grads, 1.0)
                 # loss = ops.depend(loss, optimizer(grads))
-            loss_scaler.adjust(status)
+            loss = ops.depend(loss, loss_scaler.adjust(status))
             return loss
 
         if self.jit:

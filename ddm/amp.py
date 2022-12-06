@@ -5,6 +5,7 @@ amp api.
 # pylint: disable=C0103
 # pylint: disable=W0221
 # pylint: disable=W0212
+import mindspore
 from mindspore import nn
 from mindspore import ops
 from mindspore import Tensor, Parameter, context, ms_class
@@ -14,8 +15,6 @@ from .modules import BMM, LayerNorm
 # For AMP white list
 amp_white_list = (
     nn.Dense,
-    nn.Conv2d,
-    LayerNorm,
     BMM,
 )
 
@@ -46,6 +45,10 @@ class _OutputTo16(nn.Cell):
 
 def auto_mixed_precision(network, amp_level='O1'):
     """auto mixed precision cast."""
+    if mindspore.get_context('device_target') == 'Ascend' and \
+        amp_level == 'O0':
+        amp_level = 'O1'
+        print('Model on Ascend must use auto mixed precision, the "amp_level" will be set to "O1".')
     if amp_level == 'O0':
         pass
     elif amp_level == 'O1':

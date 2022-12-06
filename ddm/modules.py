@@ -18,9 +18,17 @@ class BMM(nn.Cell):
     def __init__(self):
         super().__init__()
         self.bmm = ops.BatchMatMul()
+        self.is_ascend = mindspore.get_context('device_target') == 'Ascend'
 
     def construct(self, x, y):
+        if self.is_ascend:
+            origin_shape = x.shape[0:-2]
+            out = ops.vmap(self.mm)(x.reshape(-1, *x.shape[-2:]), y.reshape(-1, *y.shape[-2:]))
+            return out.reshape(*origin_shape, *out.shape[-2:])
         return self.bmm(x, y)
+
+    def mm(self, x, y):
+        return ops.matmul(x, y).astype(mindspore.float32)
 
 class Identity(nn.Cell):
     def construct(self, inputs):

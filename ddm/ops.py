@@ -3,8 +3,6 @@ from mindspore import ops, Tensor, context
 from mindspore.ops._primitive_cache import _get_cache_prim
 from mindspore.ops import constexpr
 
-gpu_target = (context.get_context("device_target") == "GPU")
-
 def rsqrt(x):
     rsqrt_op = _get_cache_prim(ops.Rsqrt)()
     return rsqrt_op(x)
@@ -42,16 +40,8 @@ def cumprod(input, dim, dtype=None):
     return output
 
 def softmax(x, axis=-1):
-    if gpu_target:
-        softmax_ = _get_cache_prim(ops.Softmax)(axis=axis)
-        return softmax_(x)
-    exp_ = _get_cache_prim(ops.Exp)()
-    reduce_sum_ = _get_cache_prim(ops.ReduceSum)(True)
-
-    x_max = x.max(axis=axis, keepdims=True)
-    x_exp = exp_(x - x_max)
-    partion = reduce_sum_(x_exp, axis)
-    return x_exp / partion
+    softmax_ = _get_cache_prim(ops.Softmax)(axis=axis)
+    return softmax_(x)
 
 inf = float('inf')
 
