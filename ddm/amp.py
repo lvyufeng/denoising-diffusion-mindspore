@@ -10,11 +10,11 @@ from mindspore import nn
 from mindspore import ops
 from mindspore import Tensor, Parameter, context, ms_class
 import mindspore.common.dtype as mstype
-from .modules import BMM, LayerNorm
-
+from .modules import BMM
+from .layers import InnerMatmul
 # For AMP white list
 amp_white_list = (
-    nn.Dense,
+    InnerMatmul,
     BMM,
 )
 
@@ -49,8 +49,6 @@ def auto_mixed_precision(network, amp_level='O1'):
         amp_level == 'O0':
         amp_level = 'O1'
         print('Model on Ascend must use auto mixed precision, the "amp_level" will be set to "O1".')
-    if amp_level == 'O0':
-        pass
     elif amp_level == 'O1':
         auto_white_list(network)
     elif amp_level == 'O2':

@@ -136,3 +136,4 @@ results/
 kernel_meta/
 test.py
 profiler/
+.DS_Store

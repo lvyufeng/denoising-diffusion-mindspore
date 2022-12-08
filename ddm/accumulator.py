@@ -23,9 +23,9 @@ class Accumulator():
         success = self.map(self.partial(ops.assign_add), self.inner_grads, grads)
         if self.counter % self.accumulate_step == 0:
             clip_grads, _ = clip_grad_norm(self.inner_grads, self.clip_norm)
-            self.optimizer(clip_grads)
-            success = self.map(self.partial(ops.assign), self.inner_grads, self.zeros)
+            success = ops.depend(success, self.optimizer(clip_grads))
+            success = ops.depend(success, self.map(self.partial(ops.assign), self.inner_grads, self.zeros))
 
-        ops.assign_add(self.counter, Tensor(1, mindspore.int32))
+        success = ops.depend(success, ops.assign_add(self.counter, Tensor(1, mindspore.int32)))
 
         return success

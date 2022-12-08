@@ -18,17 +18,9 @@ class BMM(nn.Cell):
     def __init__(self):
         super().__init__()
         self.bmm = ops.BatchMatMul()
-        self.is_ascend = mindspore.get_context('device_target') == 'Ascend'
 
     def construct(self, x, y):
-        if self.is_ascend:
-            origin_shape = x.shape[0:-2]
-            out = ops.vmap(self.mm)(x.reshape(-1, *x.shape[-2:]), y.reshape(-1, *y.shape[-2:]))
-            return out.reshape(*origin_shape, *out.shape[-2:])
         return self.bmm(x, y)
-
-    def mm(self, x, y):
-        return ops.matmul(x, y).astype(mindspore.float32)
 
 class Identity(nn.Cell):
     def construct(self, inputs):
@@ -57,7 +49,7 @@ class WeightStandardizedConv2d(Conv2d):
     weight standardization purportedly works synergistically with group normalization
     """
     def construct(self, x):
-        eps = 1e-5 if x.dtype == mindspore.float32 else 1e-3
+        eps = 1e-5
 
         weight = self.weight
         mean = weight.mean((1, 2, 3), keep_dims=True)
@@ -75,7 +67,7 @@ class LayerNorm(nn.Cell):
         self.g = Parameter(initializer('ones', (1, dim, 1, 1)), name='g')
 
     def construct(self, x):
-        eps = 1e-5 if x.dtype == mindspore.float32 else 1e-3
+        eps = 1e-5
         var = x.var(1, keepdims=True)
         mean = x.mean(1, keep_dims=True)
         return (x - mean) * rsqrt((var + eps)) * self.g

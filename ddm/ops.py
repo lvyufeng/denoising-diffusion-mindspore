@@ -3,6 +3,8 @@ from mindspore import ops, Tensor, context
 from mindspore.ops._primitive_cache import _get_cache_prim
 from mindspore.ops import constexpr
 
+gpu_target = (context.get_context("device_target") == "GPU")
+
 def rsqrt(x):
     rsqrt_op = _get_cache_prim(ops.Rsqrt)()
     return rsqrt_op(x)
@@ -40,8 +42,16 @@ def cumprod(input, dim, dtype=None):
     return output
 
 def softmax(x, axis=-1):
-    softmax_ = _get_cache_prim(ops.Softmax)(axis=axis)
-    return softmax_(x)
+    if gpu_target:
+        softmax_ = _get_cache_prim(ops.Softmax)(axis=axis)
+        return softmax_(x)
+    exp_ = _get_cache_prim(ops.Exp)()
+    reduce_sum_ = _get_cache_prim(ops.ReduceSum)(True)
+
+    x_max = x.max(axis=axis, keepdims=True)
+    x_exp = exp_(x - x_max)
+    partion = reduce_sum_(x_exp, axis)
+    return x_exp / partion
 
 inf = float('inf')
 
@@ -238,7 +248,7 @@ def clip_grad_norm(grads, max_norm: float, norm_type: float = 2.0):
         for grad in grads:
             norms += (norm(grad, norm_type),)
         total_norm = norm(ops.stack(norms), norm_type)
-
+    # print(total_norm)
     clip_coef = ops.div(max_norm, (total_norm + ops.scalar_to_tensor(1e-6, mindspore.float32)))
     # Note: multiplying by the clamped coef is redundant when the coef is clamped to 1, but doing so
     # avoids a `if clip_coef < 1:` conditional which can require a CPU <=> device synchronization

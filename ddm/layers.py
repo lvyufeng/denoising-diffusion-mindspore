@@ -76,9 +76,18 @@ class Conv2d(nn.Conv2d):
             bound = 1 / math.sqrt(fan_in)
             self.bias.set_data(initializer(Uniform(bound), [self.out_channels]))
 
+class InnerMatmul(nn.Cell):
+    def __init__(self):
+        super().__init__()
+        self.matmul = ops.MatMul(transpose_b=True)
+
+    def construct(self, x, y):
+        return self.matmul(x, y)
+
 class Dense(nn.Dense):
     def __init__(self, in_channels, out_channels, has_bias=True, activation=None):
         super().__init__(in_channels, out_channels, weight_init='normal', bias_init='zeros', has_bias=has_bias, activation=activation)
+        self.matmul = InnerMatmul()
         self.reset_parameters()
         
     def reset_parameters(self):
