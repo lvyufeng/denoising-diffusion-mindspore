@@ -45,10 +45,10 @@ class _OutputTo16(nn.Cell):
 
 def auto_mixed_precision(network, amp_level='O1'):
     """auto mixed precision cast."""
-    if mindspore.get_context('device_target') == 'Ascend' and \
-        amp_level == 'O0':
-        amp_level = 'O1'
-        print('Model on Ascend must use auto mixed precision, the "amp_level" will be set to "O1".')
+    if amp_level == 'O0':
+        if mindspore.get_context('device_target') == 'Ascend':
+            amp_level = 'O1'
+            print('Model on Ascend must use auto mixed precision, the "amp_level" will be set to "O1".')
     elif amp_level == 'O1':
         auto_white_list(network)
     elif amp_level == 'O2':

@@ -202,7 +202,8 @@ class Trainer(object):
                         accumulate_remain_step == (self.gradient_accumulate_every - 1):
 
                         self.ema.set_train(False)
-                        self.ema.synchronise()
+                        # model -> swap, ema -> model
+                        self.ema.synchronize()
 
                         batches = num_to_groups(self.num_samples, self.batch_size)
                         all_images_list = list(map(lambda n: self.ema.online_model.sample(batch_size=n), batches))
@@ -210,7 +211,10 @@ class Trainer(object):
                         all_images = np.concatenate(all_images_list, axis = 0)
                         to_image(all_images, str(self.results_folder + f'/sample-{accumulate_step}.png'), nrow = int(math.sqrt(self.num_samples)))
 
+                        # save ckpt(ema params)
                         self.save(accumulate_step)
+                        # swap -> model
+                        self.ema.desynchronize()
 
                 if self.step >= self.gradient_accumulate_every * self.train_num_steps:
                     break

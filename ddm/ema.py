@@ -48,6 +48,7 @@ class EMA(nn.Cell):
         self.online_model = model
         self.online_params = ParameterTuple(model.trainable_params())
         self.ema_params = self.online_params.clone('ema.')
+        self.swap_params = self.online_params.clone('swap.', 'zeros')
 
         self.update_every = update_every
         self.update_after_step = update_after_step
@@ -105,6 +106,15 @@ class EMA(nn.Cell):
         return success
 
     @ms_function
-    def synchronise(self):
-        success = self.map(ops.assign, self.online_params, self.ema_params)
+    def synchronize(self):
+        # model -> swap
+        success = self.map(ops.assign, self.swap_params, self.online_params)
+        # ema -> model
+        success = ops.depend(success, self.map(ops.assign, self.online_params, self.ema_params))
+        return success
+
+    @ms_function
+    def desynchronize(self):
+        # swap -> model
+        success = self.map(ops.assign, self.online_params, self.swap_params)
         return success
