@@ -14,7 +14,8 @@ from .modules import BMM
 from .layers import InnerMatmul
 # For AMP white list
 amp_white_list = (
-    InnerMatmul,
+    nn.Dense,
+    nn.Conv2d,
     BMM,
 )
 
