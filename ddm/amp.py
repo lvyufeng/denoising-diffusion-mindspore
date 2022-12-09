@@ -11,7 +11,6 @@ from mindspore import ops
 from mindspore import Tensor, Parameter, context, ms_class
 import mindspore.common.dtype as mstype
 from .modules import BMM
-from .layers import InnerMatmul
 # For AMP white list
 amp_white_list = (
     nn.Dense,
@@ -19,10 +18,8 @@ amp_white_list = (
     BMM,
 )
 
-amp_black_list = (
-    nn.BatchNorm1d,
-    nn.BatchNorm2d
-)
+amp_black_list = (nn.BatchNorm1d, nn.BatchNorm2d)
+
 
 class _OutputTo32(nn.Cell):
     "Wrap cell for amp. Cast network output back to float32"
@@ -34,6 +31,7 @@ class _OutputTo32(nn.Cell):
     def construct(self, *x):
         return ops.cast(self._op(*x), mstype.float32)
 
+
 class _OutputTo16(nn.Cell):
     "Wrap cell for amp. Cast network output back to float32"
 
@@ -44,12 +42,15 @@ class _OutputTo16(nn.Cell):
     def construct(self, *x):
         return ops.cast(self._op(*x), mstype.float16)
 
+
 def auto_mixed_precision(network, amp_level='O1'):
     """auto mixed precision cast."""
     if amp_level == 'O0':
         if mindspore.get_context('device_target') == 'Ascend':
             amp_level = 'O1'
-            print('Model on Ascend must use auto mixed precision, the "amp_level" will be set to "O1".')
+            print(
+                'Model on Ascend must use auto mixed precision, the "amp_level" will be set to "O1".'
+            )
     elif amp_level == 'O1':
         auto_white_list(network)
     elif amp_level == 'O2':
@@ -59,6 +60,7 @@ def auto_mixed_precision(network, amp_level='O1'):
     else:
         raise ValueError(f"the amp_level '{amp_level}' is not supported.")
     return network
+
 
 def auto_white_list(network, white_list=None):
     """auto cast based on white list"""
@@ -71,13 +73,15 @@ def auto_white_list(network, white_list=None):
         if subcell == network:
             continue
         if isinstance(subcell, white_list):
-            network._cells[name] = _OutputTo32(subcell.to_float(mstype.float16))
+            network._cells[name] = _OutputTo32(subcell.to_float(
+                mstype.float16))
             change = True
         else:
             auto_white_list(subcell, white_list)
 
     if isinstance(network, nn.SequentialCell) and change:
         network.cell_list = list(network.cells())
+
 
 def auto_black_list(network, black_list=None):
     """auto cast based on black list"""
@@ -91,13 +95,15 @@ def auto_black_list(network, black_list=None):
         if subcell == network:
             continue
         if isinstance(subcell, black_list):
-            network._cells[name] = _OutputTo16(subcell.to_float(mstype.float32))
+            network._cells[name] = _OutputTo16(subcell.to_float(
+                mstype.float32))
             change = True
         else:
             auto_black_list(subcell, black_list)
 
     if isinstance(network, nn.SequentialCell) and change:
         network.cell_list = list(network.cells())
+
 
 # For Loss Scaler
 ascend_target = (context.get_context("device_target") == "Ascend")
@@ -122,9 +128,11 @@ def grad_unscale(scale, grad):
     """grad unscale."""
     return grad * reciprocal(scale).astype(grad.dtype)
 
+
 def grad_scale(scale, grad):
     """grad scale."""
     return grad * scale.astype(grad.dtype)
+
 
 def is_finite(inputs):
     """whether input tensor is finite."""
@@ -132,6 +140,7 @@ def is_finite(inputs):
         return gpu_float_status(inputs)[0] == 0
     status = ops.isfinite(inputs)
     return status.all()
+
 
 def all_finite(inputs):
     """whether all inputs tensor are finite."""
@@ -151,9 +160,11 @@ class LossScaler():
     """
     Basic LossScaler.
     """
+
     def __init__(self, scale_value):
         super().__init__()
-        self.scale_value = Parameter(Tensor(scale_value, dtype=mstype.float32), name="scale_value")
+        self.scale_value = Parameter(Tensor(scale_value, dtype=mstype.float32),
+                                     name="scale_value")
         self.counter = Parameter(Tensor(0, dtype=mstype.int32), name="counter")
 
     def scale(self, inputs):
@@ -168,10 +179,12 @@ class LossScaler():
         """adjust scale value."""
         raise NotImplementedError
 
+
 class NoLossScaler(LossScaler):
     """
     No LossScaler
     """
+
     def __init__(self):
         super().__init__(1)
 
@@ -184,10 +197,12 @@ class NoLossScaler(LossScaler):
     def adjust(self, grads_finite):
         return True
 
+
 class StaticLossScaler(LossScaler):
     """
     Static LossScaler.
     """
+
     def scale(self, inputs):
         return hypermap(partial(grad_scale, self.scale_value), inputs)
 
@@ -197,10 +212,12 @@ class StaticLossScaler(LossScaler):
     def adjust(self, grads_finite):
         return True
 
+
 class DynamicLossScaler(LossScaler):
     """
     Dynamic LossScaler
     """
+
     def __init__(self, scale_value, scale_factor, scale_window):
         super().__init__(scale_value)
         self.scale_factor = scale_factor
@@ -220,10 +237,8 @@ class DynamicLossScaler(LossScaler):
             # When grads are finite increase loss scale periodically.
             ops.select(
                 self.counter == (self.scale_window - 1),
-                ops.select(is_finite(scale_mul_factor),
-                           scale_mul_factor,
-                           self.scale_value),
-                self.scale_value),
+                ops.select(is_finite(scale_mul_factor), scale_mul_factor,
+                           self.scale_value), self.scale_value),
             # If grads are non finite reduce loss scale.
             ops.maximum(one, self.scale_value / self.scale_factor))
         ops.assign(self.scale_value, scale_value)
