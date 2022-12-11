@@ -46,6 +46,7 @@ class Trainer(object):
         num_samples = 25,
         results_folder = './results',
         amp_level = 'O1',
+        dynamic_loss_scale = False,
         jit = True,
         akg = True,
         distributed = False,
@@ -104,6 +105,7 @@ class Trainer(object):
         self.jit = jit
         self.model = diffusion_model
         self.amp_level = amp_level
+        self.dynamic_loss_scale = dynamic_loss_scale
 
     def save(self, milestone):
         if not self.is_main_process:
@@ -136,10 +138,13 @@ class Trainer(object):
         num_timesteps = model.num_timesteps
 
         # auto mixed precision
-        from .amp import DynamicLossScaler, NoLossScaler, auto_mixed_precision, all_finite
+        from .amp import DynamicLossScaler, StaticLossScaler, NoLossScaler, auto_mixed_precision, all_finite
         model = auto_mixed_precision(model, self.amp_level)
         if self.amp_level != 'O0':
-            loss_scaler = DynamicLossScaler(65536, 2, 1000)
+            if self.dynamic_loss_scale:
+                loss_scaler = DynamicLossScaler(65536, 2, 1000)
+            else:
+                loss_scaler = StaticLossScaler(65536)
         else:
             loss_scaler = NoLossScaler()
 

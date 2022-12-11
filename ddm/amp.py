@@ -14,7 +14,6 @@ from .modules import BMM
 # For AMP white list
 amp_white_list = (
     nn.Dense,
-    nn.Conv2d,
     BMM,
 )
 
