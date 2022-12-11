@@ -10,6 +10,7 @@ from mindspore import ms_function, save_checkpoint, load_checkpoint, load_param_
 from mindspore import set_auto_parallel_context
 from mindspore.communication import init, get_rank, get_group_size
 from mindspore.parallel._utils import _get_device_num, _get_gradients_mean
+from mindspore.dataset import VisionBaseDataset, GeneratorDataset, MindDataset
 
 from .dataset import create_dataset
 from .api import value_and_grad
@@ -32,7 +33,7 @@ class Trainer(object):
     def __init__(
         self,
         diffusion_model,
-        folder,
+        folder_or_dataset,
         *,
         train_batch_size = 16,
         gradient_accumulate_every = 1,
@@ -86,8 +87,13 @@ class Trainer(object):
         self.image_size = diffusion_model.image_size
 
         # dataset and dataloader
-        self.ds = create_dataset(folder, self.image_size, augment_horizontal_flip=augment_horizontal_flip, \
-            batch_size=train_batch_size, num_shards=rank_size, shard_id=rank_id, shuffle=True, drop_remainder=True)
+        if isinstance(folder_or_dataset, str):
+            self.ds = create_dataset(folder_or_dataset, self.image_size, augment_horizontal_flip=augment_horizontal_flip, \
+                batch_size=train_batch_size, num_shards=rank_size, shard_id=rank_id, shuffle=True, drop_remainder=True)
+        elif isinstance(folder_or_dataset, (VisionBaseDataset, GeneratorDataset, MindDataset)):
+            self.ds = folder_or_dataset
+        else:
+            raise ValueError(f"the value of 'folder_or_dataset' should be a str or Dataset, but get {folder_or_dataset}.")
         dataset_size = self.ds.get_dataset_size()
         self.ds = self.ds.repeat(int(train_num_steps * gradient_accumulate_every // dataset_size) + 1)
         # optimizer
