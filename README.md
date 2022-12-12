@@ -4,6 +4,13 @@
 
 Implementation of [Denoising Diffusion Probabilistic Model](https://arxiv.org/abs/2006.11239) in MindSpore. The implementation refers to lucidrains's [denoising-diffusion-pytorch](https://github.com/lucidrains/denoising-diffusion-pytorch).
 
+
+## Results
+
+Training 50k steps with EMA.
+
+<img src="./assets/sample-50000.png"></img>
+
 ## Install
 
 
@@ -82,6 +89,8 @@ trainer = Trainer(
 
 trainer.train()
 ```
+
+> `amp_level` of `Trainer` will automaticlly set to `O1` on Ascend.
 
 <!-- 
 
