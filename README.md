@@ -14,15 +14,18 @@ Training 50k steps with EMA.
 ## Install
 
 
-### From Github repo(oversea)
+### From PyPI
 
 ```bash
-pip install git+https://github.com/lvyufeng/denoising-diffusion-mindspore
+pip install denoising-diffusion-mindspore
 ```
 
-### From OpenI repo(in China)
+### From Source code
 
 ```bash
+# Github repo(oversea)
+pip install git+https://github.com/lvyufeng/denoising-diffusion-mindspore
+# From OpenI repo(in China)
 pip install git+https://openi.pcl.ac.cn/lvyufeng/denoising-diffusion-mindspore
 ```
 
