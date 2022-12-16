@@ -3,7 +3,7 @@ from setuptools import setup, find_packages
 setup(
   name = 'denoising-diffusion-mindspore',
   packages = find_packages(),
-  version = '0.0.1',
+  version = '0.0.1-alpha',
   license='MIT',
   description = 'Denoising Diffusion Probabilistic Models - MindSpore',
   author = 'Lyu Yufeng',
@@ -25,5 +25,7 @@ setup(
     'Topic :: Scientific/Engineering :: Artificial Intelligence',
     'License :: OSI Approved :: MIT License',
     'Programming Language :: Python :: 3.7',
+    'Programming Language :: Python :: 3.8',
+    'Programming Language :: Python :: 3.9',
   ],
 )
